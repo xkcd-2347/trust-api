@@ -50,7 +50,7 @@ pub async fn get_package(query: web::Query<PackageQuery>) -> Result<HttpResponse
     }
 }
 
-#[derive(ToSchema, Serialize, Deserialize)]
+#[derive(ToSchema, Serialize, Deserialize, Debug)]
 pub struct PackageList(pub Vec<String>);
 
 impl PackageList {
