@@ -3,6 +3,7 @@ use std::process::{ExitCode, Termination};
 
 mod package;
 mod server;
+mod vulnerability;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum Command {

@@ -4,6 +4,7 @@ use packageurl::PackageUrl;
 use utoipa::ToSchema;
 use serde::{Serialize, Deserialize};
 use thiserror::Error;
+use serde_json::json;
 
 pub(crate) fn configure() -> impl FnOnce(&mut ServiceConfig) {
     |config: &mut ServiceConfig| {
@@ -22,9 +23,9 @@ pub struct PackageQuery {
 #[utoipa::path(
     responses(
         (status = 200, description = "Package found", body = Package),
-        (status = NOT_FOUND, description = "Package was not found"),
-        (status = BAD_REQUEST, description = "Invalid package URL"),
-        (status = BAD_REQUEST, description = "Missing query argument")
+        (status = NOT_FOUND, description = "Package was not found", body = ApiError),
+        (status = BAD_REQUEST, description = "Invalid package URL", body = ApiError),
+        (status = BAD_REQUEST, description = "Missing query argument", body = ApiError)
     ),
     params(
         ("purl" = String, Query, description = "Package URL to query"),
@@ -61,13 +62,13 @@ impl PackageList {
 #[utoipa::path(
     request_body = PackageList,
     responses(
-        (status = 200, description = "Package found", body = Package),
+        (status = 200, description = "Package found", body = Vec<Option<Package>>),
         (status = BAD_REQUEST, description = "Invalid package URLs"),
     ),
 )]
 #[post("/api/package")]
 pub async fn query_package(body: Json<PackageList>) -> Result<HttpResponse, ApiError> {
-    let mut packages: Vec<Package>= Vec::new();
+    let mut packages: Vec<Option<Package>> = Vec::new();
     for purl in body.list().iter() {
         if let Ok(purl) = PackageUrl::from_str(purl) {
             let p = Package {
@@ -76,7 +77,7 @@ pub async fn query_package(body: Json<PackageList>) -> Result<HttpResponse, ApiE
                 snyk: None,
                 vulnerabilities: Vec::new(),
             };
-            packages.push(p);
+            packages.push(Some(p));
         } else {
             return Err(ApiError::InvalidPackageUrl { purl: purl.to_string() })
         }

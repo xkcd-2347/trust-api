@@ -8,6 +8,7 @@ use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     middleware::Logger,
     web::Data,
+    web,
     App, HttpResponse, HttpServer,
 };
 use utoipa::{
@@ -16,6 +17,7 @@ use utoipa::{
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::package;
+use crate::vulnerability;
 
 pub struct Server {
     bind: String,
@@ -30,12 +32,14 @@ pub struct Server {
             package::query_package,
             package::query_package_dependencies,
             package::query_package_dependants,
+            vulnerability::query_vulnerability,
         ),
         components(
             schemas(package::Package, package::PackageList, package::PackageDependencies, package::PackageDependants, package::PackageRef, package::SnykData, package::Vulnerability)
         ),
         tags(
-            (name = "package", description = "Package API endpoints.")
+            (name = "package", description = "Package query endpoints."),
+            (name = "vulnerability", description = "Vulnerability query endpoints")
         ),
     )]
 pub struct ApiDoc;
@@ -52,6 +56,7 @@ impl Server {
             App::new()
                 .wrap(Logger::default())
                 .configure(package::configure())
+                .configure(vulnerability::configure())
                 .service(
                     SwaggerUi::new("/swagger-ui/{_:.*}")
                         .url("/openapi.json", openapi.clone()),
