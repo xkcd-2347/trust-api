@@ -38,6 +38,7 @@ pub async fn get_package(query: web::Query<PackageQuery>) -> Result<HttpResponse
             let p = Package {
                 purl: purl.to_string(),
                 href: format!("/api/package?purl={}", &urlencoding::encode(&purl.to_string())),
+                trustedVersions: Vec::new(),
                 snyk: None,
                 vulnerabilities: Vec::new(),
             };
@@ -51,6 +52,7 @@ pub async fn get_package(query: web::Query<PackageQuery>) -> Result<HttpResponse
 }
 
 #[derive(ToSchema, Serialize, Deserialize, Debug)]
+#[schema(example = "[\"pkg:maven/org.quarkus/quarkus@1.2\"]")]
 pub struct PackageList(pub Vec<String>);
 
 impl PackageList {
@@ -74,6 +76,7 @@ pub async fn query_package(body: Json<PackageList>) -> Result<HttpResponse, ApiE
             let p = Package {
                 purl: purl.to_string(),
                 href: format!("/api/package?purl={}", &urlencoding::encode(&purl.to_string())),
+                trustedVersions: Vec::new(),
                 snyk: None,
                 vulnerabilities: Vec::new(),
             };
@@ -124,9 +127,20 @@ pub async fn query_package_dependants(body: Json<PackageList>)-> Result<HttpResp
 }
 
 #[derive(ToSchema, Serialize, Deserialize)]
+#[schema(example = json!(Package {
+    purl: "pkg:maven/org.apache.quarkus/quarkus@1.2".to_string(),
+    href: "/api/package?purl=foo".to_string(),
+    trustedVersions: vec![PackageRef {
+        purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
+        href: "/api/package?purl=foo".to_string(),
+    }],
+    vulnerabilities: Vec::new(),
+    snyk: None,
+}))]
 pub struct Package {
     purl: String,
     href: String,
+    trustedVersions: Vec<PackageRef>,
     vulnerabilities: Vec<String>,
     snyk: Option<SnykData>,
 }
