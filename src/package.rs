@@ -23,7 +23,16 @@ pub struct PackageQuery {
 #[utoipa::path(
     responses(
         (status = 200, description = "Package found", body = Package),
-        (status = NOT_FOUND, description = "Package was not found"),
+        (status = NOT_FOUND, description = "Package not found", body = Package, example = json!(Package {
+            purl: None,
+            href: None,
+            trustedVersions: vec![PackageRef {
+                purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
+                href: "/api/package?purl=foo".to_string(),
+            }],
+            vulnerabilities: Vec::new(),
+            snyk: None,
+        })),
         (status = BAD_REQUEST, description = "Invalid package URL"),
         (status = BAD_REQUEST, description = "Missing query argument")
     ),
@@ -36,8 +45,8 @@ pub async fn get_package(query: web::Query<PackageQuery>) -> Result<HttpResponse
     if let Some(purl) = &query.purl {
         if let Ok(purl) = PackageUrl::from_str(&purl) {
             let p = Package {
-                purl: purl.to_string(),
-                href: format!("/api/package?purl={}", &urlencoding::encode(&purl.to_string())),
+                purl: Some(purl.to_string()),
+                href: Some(format!("/api/package?purl={}", &urlencoding::encode(&purl.to_string()))),
                 trustedVersions: Vec::new(),
                 snyk: None,
                 vulnerabilities: Vec::new(),
@@ -65,6 +74,16 @@ impl PackageList {
     request_body = PackageList,
     responses(
         (status = 200, description = "Package found", body = Vec<Option<Package>>),
+        (status = NOT_FOUND, description = "Package not found", body = Package, example = json!(Package {
+            purl: None,
+            href: None,
+            trustedVersions: vec![PackageRef {
+                purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
+                href: "/api/package?purl=foo".to_string(),
+            }],
+            vulnerabilities: Vec::new(),
+            snyk: None,
+        })),
         (status = BAD_REQUEST, description = "Invalid package URLs"),
     ),
 )]
@@ -74,8 +93,8 @@ pub async fn query_package(body: Json<PackageList>) -> Result<HttpResponse, ApiE
     for purl in body.list().iter() {
         if let Ok(purl) = PackageUrl::from_str(purl) {
             let p = Package {
-                purl: purl.to_string(),
-                href: format!("/api/package?purl={}", &urlencoding::encode(&purl.to_string())),
+                purl: Some(purl.to_string()),
+                href: Some(format!("/api/package?purl={}", &urlencoding::encode(&purl.to_string()))),
                 trustedVersions: Vec::new(),
                 snyk: None,
                 vulnerabilities: Vec::new(),
@@ -128,24 +147,46 @@ pub async fn query_package_dependants(body: Json<PackageList>)-> Result<HttpResp
 
 #[derive(ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(Package {
-    purl: "pkg:maven/org.apache.quarkus/quarkus@1.2".to_string(),
-    href: "/api/package?purl=foo".to_string(),
+    purl: Some("pkg:maven/org.apache.quarkus/quarkus@1.2".to_string()),
+    href: Some("/api/package?purl=foo".to_string()),
     trustedVersions: vec![PackageRef {
         purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
         href: "/api/package?purl=foo".to_string(),
     }],
-    vulnerabilities: Vec::new(),
+    vulnerabilities: vec![VulnerabilityRef {
+        cve: "CVE-1234".into(),
+        href: "/api/vulnerability/CVE-1234".into()
+    }],
     snyk: None,
 }))]
 pub struct Package {
-    purl: String,
-    href: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    purl: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    href: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     trustedVersions: Vec<PackageRef>,
-    vulnerabilities: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    vulnerabilities: Vec<VulnerabilityRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     snyk: Option<SnykData>,
 }
 
 #[derive(ToSchema, Serialize, Deserialize)]
+#[schema(example = json!(VulnerabilityRef {
+    cve: "CVE-1234".into(),
+    href: "/api/vulnerability/CVE-1234".into()
+}))]
+pub struct VulnerabilityRef {
+    cve: String,
+    href: String,
+}
+
+#[derive(ToSchema, Serialize, Deserialize)]
+#[schema(example = json!(PackageRef {
+    purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
+    href: "/api/package?purl=foo".to_string(),
+}))]
 pub struct PackageRef {
     purl: String,
     href: String,
