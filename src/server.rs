@@ -35,7 +35,7 @@ pub struct Server {
             vulnerability::query_vulnerability,
         ),
         components(
-            schemas(package::Package, package::PackageList, package::PackageDependencies, package::PackageDependants, package::PackageRef, package::SnykData, package::Vulnerability)
+            schemas(package::Package, package::PackageList, package::PackageDependencies, package::PackageDependants, package::PackageRef, package::SnykData, vulnerability::Vulnerability)
         ),
         tags(
             (name = "package", description = "Package query endpoints."),

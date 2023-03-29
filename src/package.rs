@@ -35,7 +35,7 @@ pub struct PackageQuery {
 pub async fn get_package(query: web::Query<PackageQuery>) -> Result<HttpResponse, ApiError> {
     if let Some(purl) = &query.purl {
         if let Ok(purl) = PackageUrl::from_str(&purl) {
-            let p = Package{
+            let p = Package {
                 purl: purl.to_string(),
                 href: format!("/api/package?purl={}", &urlencoding::encode(&purl.to_string())),
                 snyk: None,
@@ -127,7 +127,7 @@ pub async fn query_package_dependants(body: Json<PackageList>)-> Result<HttpResp
 pub struct Package {
     purl: String,
     href: String,
-    vulnerabilities: Vec<Vulnerability>,
+    vulnerabilities: Vec<String>,
     snyk: Option<SnykData>,
 }
 
@@ -139,9 +139,6 @@ pub struct PackageRef {
 
 #[derive(ToSchema, Serialize, Deserialize)]
 pub struct SnykData;
-
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct Vulnerability;
 
 #[derive(ToSchema, Serialize, Deserialize)]
 pub struct PackageDependencies(pub Vec<PackageRef>);
