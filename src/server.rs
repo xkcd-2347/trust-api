@@ -27,9 +27,12 @@ pub struct Server {
     #[openapi(
         paths(
             package::get_package,
+            package::query_package,
+            package::query_package_dependencies,
+            package::query_package_dependants,
         ),
         components(
-            schemas(package::Package)
+            schemas(package::Package, package::PackageList, package::PackageDependencies, package::PackageDependants, package::PackageRef, package::SnykData, package::Vulnerability)
         ),
         tags(
             (name = "package", description = "Package API endpoints.")
@@ -51,7 +54,7 @@ impl Server {
                 .configure(package::configure())
                 .service(
                     SwaggerUi::new("/swagger-ui/{_:.*}")
-                        .url("/api-doc/openapi.json", openapi.clone()),
+                        .url("/openapi.json", openapi.clone()),
                 )
         })
         .bind((self.bind, self.port))?

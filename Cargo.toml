@@ -26,3 +26,4 @@ thiserror = "1"
 futures = "0.3"
 utoipa = { version = "3", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "3", features = ["actix-web"] }
+urlencoding = "2.1.2"
