@@ -23,9 +23,9 @@ pub struct PackageQuery {
 #[utoipa::path(
     responses(
         (status = 200, description = "Package found", body = Package),
-        (status = NOT_FOUND, description = "Package was not found", body = ApiError),
-        (status = BAD_REQUEST, description = "Invalid package URL", body = ApiError),
-        (status = BAD_REQUEST, description = "Missing query argument", body = ApiError)
+        (status = NOT_FOUND, description = "Package was not found"),
+        (status = BAD_REQUEST, description = "Invalid package URL"),
+        (status = BAD_REQUEST, description = "Missing query argument")
     ),
     params(
         ("purl" = String, Query, description = "Package URL to query"),
