@@ -10,9 +10,7 @@ use actix_web::{
     web::Data,
     App, HttpResponse, HttpServer,
 };
-use futures::future::LocalBoxFuture;
 use utoipa::{
-    openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
     Modify, OpenApi,
 };
 use utoipa_swagger_ui::SwaggerUi;
@@ -37,7 +35,7 @@ pub struct Server {
             (name = "package", description = "Package API endpoints.")
         ),
     )]
-pub struct ApiDoc {}
+pub struct ApiDoc;
 
 impl Server {
     pub fn new(bind: String, port: u16) -> Self {
