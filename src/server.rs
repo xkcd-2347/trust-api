@@ -20,6 +20,7 @@ use crate::vulnerability;
 pub struct Server {
     bind: String,
     port: u16,
+    guac_url: String,
 }
 
 #[derive(OpenApi)]
@@ -42,8 +43,8 @@ pub struct Server {
 pub struct ApiDoc;
 
 impl Server {
-    pub fn new(bind: String, port: u16) -> Self {
-        Self { bind, port }
+    pub fn new(bind: String, port: u16, guac_url: String) -> Self {
+        Self { bind, port, guac_url }
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
@@ -52,7 +53,7 @@ impl Server {
         HttpServer::new(move || {
             App::new()
                 .wrap(Logger::default())
-                .data(package::TrustedGav::new())
+                .data(package::TrustedContent::new(&self.guac_url))
                 .configure(package::configure())
                 .configure(vulnerability::configure())
                 .service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/openapi.json", openapi.clone()))

@@ -8,6 +8,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use thiserror::Error;
 use utoipa::ToSchema;
+use guac::{client::GuacClient};
 
 pub(crate) fn configure() -> impl FnOnce(&mut ServiceConfig) {
     |config: &mut ServiceConfig| {
@@ -25,12 +26,13 @@ pub struct PackageQuery {
 
 static TRUSTED_GAV: &str = include_str!("../data/trusted-gav.json");
 
-pub struct TrustedGav {
+pub struct TrustedContent {
     data: HashMap<String, String>,
+    client: GuacClient,
 }
 
-impl TrustedGav {
-    pub fn new() -> Self {
+impl TrustedContent {
+    pub fn new(url: &str) -> Self {
         let mut data = HashMap::new();
         let input: serde_json::Value = serde_json::from_str(TRUSTED_GAV).unwrap();
         if let Some(input) = input.as_array() {
@@ -40,8 +42,9 @@ impl TrustedGav {
                 data.insert(upstream, tc);
             }
         }
+        let client = GuacClient::new(url.to_string());
 
-        Self { data }
+        Self { data, client }
     }
 
     fn lookup(&self, purl: &str) -> Result<Package, ApiError> {
@@ -101,7 +104,7 @@ impl TrustedGav {
 )]
 #[get("/api/package")]
 pub async fn get_package(
-    data: web::Data<TrustedGav>,
+    data: web::Data<TrustedContent>,
     query: web::Query<PackageQuery>,
 ) -> Result<HttpResponse, ApiError> {
     if let Some(purl) = &query.purl {
@@ -141,7 +144,7 @@ impl PackageList {
 )]
 #[post("/api/package")]
 pub async fn query_package(
-    data: web::Data<TrustedGav>,
+    data: web::Data<TrustedContent>,
     body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
     let mut packages: Vec<Option<Package>> = Vec::new();
