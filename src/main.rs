@@ -35,10 +35,7 @@ impl Cli {
 
     async fn run_command(self) -> anyhow::Result<ExitCode> {
         match self.command {
-            Command::Run(Run {
-                bind,
-                port,
-            }) => {
+            Command::Run(Run { bind, port }) => {
                 let s = server::Server::new(bind, port);
                 s.run().await?;
             }

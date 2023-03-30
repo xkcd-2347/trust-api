@@ -1,10 +1,13 @@
-use actix_web::{Responder, web, error, http::StatusCode, HttpResponse, web::Json, web::ServiceConfig, post, get};
+use actix_web::{
+    error, get, http::StatusCode, post, web, web::Json, web::ServiceConfig, HttpResponse, Responder,
+};
 use core::str::FromStr;
 use packageurl::PackageUrl;
-use utoipa::ToSchema;
-use serde::{Serialize, Deserialize};
-use thiserror::Error;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashMap;
+use thiserror::Error;
+use utoipa::ToSchema;
 
 pub(crate) fn configure() -> impl FnOnce(&mut ServiceConfig) {
     |config: &mut ServiceConfig| {
@@ -20,6 +23,62 @@ pub struct PackageQuery {
     purl: Option<String>,
 }
 
+static TRUSTED_GAV: &str = include_str!("../data/trusted-gav.json");
+
+pub struct TrustedGav {
+    data: HashMap<String, String>,
+}
+
+impl TrustedGav {
+    pub fn new() -> Self {
+        let mut data = HashMap::new();
+        let input: serde_json::Value = serde_json::from_str(TRUSTED_GAV).unwrap();
+        if let Some(input) = input.as_array() {
+            for entry in input.iter() {
+                let upstream = entry["upstream"].as_str().unwrap().to_string();
+                let tc = entry["trusted"].as_str().unwrap().to_string();
+                data.insert(upstream, tc);
+            }
+        }
+
+        Self { data }
+    }
+
+    fn lookup(&self, purl: &str) -> Result<Package, ApiError> {
+        if let Ok(purl) = PackageUrl::from_str(&purl) {
+            let query_purl = format!(
+                "pkg:{}/{}/{}@{}",
+                purl.ty(),
+                purl.namespace().unwrap(),
+                purl.name(),
+                purl.version().unwrap()
+            );
+            let mut trustedVersions = Vec::new();
+            if let Some(p) = self.data.get(&query_purl) {
+                trustedVersions.push(PackageRef {
+                    purl: p.clone(),
+                    href: format!("/api/package?purl={}", &urlencoding::encode(&p)),
+                });
+            }
+            let p = Package {
+                purl: Some(purl.to_string()),
+                href: Some(format!(
+                    "/api/package?purl={}",
+                    &urlencoding::encode(&purl.to_string())
+                )),
+                trustedVersions,
+                snyk: None,
+                vulnerabilities: Vec::new(),
+            };
+            Ok(p)
+        } else {
+            Err(ApiError::InvalidPackageUrl {
+                purl: purl.to_string(),
+            })
+        }
+    }
+}
+
 #[utoipa::path(
     responses(
         (status = 200, description = "Package found", body = Package),
@@ -28,7 +87,7 @@ pub struct PackageQuery {
             href: None,
             trustedVersions: vec![PackageRef {
                 purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
-                href: "/api/package?purl=foo".to_string(),
+                href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
             }],
             vulnerabilities: Vec::new(),
             snyk: None,
@@ -41,20 +100,13 @@ pub struct PackageQuery {
     )
 )]
 #[get("/api/package")]
-pub async fn get_package(query: web::Query<PackageQuery>) -> Result<HttpResponse, ApiError> {
+pub async fn get_package(
+    data: web::Data<TrustedGav>,
+    query: web::Query<PackageQuery>,
+) -> Result<HttpResponse, ApiError> {
     if let Some(purl) = &query.purl {
-        if let Ok(purl) = PackageUrl::from_str(&purl) {
-            let p = Package {
-                purl: Some(purl.to_string()),
-                href: Some(format!("/api/package?purl={}", &urlencoding::encode(&purl.to_string()))),
-                trustedVersions: Vec::new(),
-                snyk: None,
-                vulnerabilities: Vec::new(),
-            };
-            Ok(HttpResponse::Ok().json(p))
-        } else {
-            Err(ApiError::InvalidPackageUrl { purl: purl.to_string() })
-        }
+        let p = data.lookup(purl)?;
+        Ok(HttpResponse::Ok().json(p))
     } else {
         Err(ApiError::MissingQueryArgument)
     }
@@ -79,7 +131,7 @@ impl PackageList {
             href: None,
             trustedVersions: vec![PackageRef {
                 purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
-                href: "/api/package?purl=foo".to_string(),
+                href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
             }],
             vulnerabilities: Vec::new(),
             snyk: None,
@@ -88,20 +140,16 @@ impl PackageList {
     ),
 )]
 #[post("/api/package")]
-pub async fn query_package(body: Json<PackageList>) -> Result<HttpResponse, ApiError> {
+pub async fn query_package(
+    data: web::Data<TrustedGav>,
+    body: Json<PackageList>,
+) -> Result<HttpResponse, ApiError> {
     let mut packages: Vec<Option<Package>> = Vec::new();
     for purl in body.list().iter() {
-        if let Ok(purl) = PackageUrl::from_str(purl) {
-            let p = Package {
-                purl: Some(purl.to_string()),
-                href: Some(format!("/api/package?purl={}", &urlencoding::encode(&purl.to_string()))),
-                trustedVersions: Vec::new(),
-                snyk: None,
-                vulnerabilities: Vec::new(),
-            };
+        if let Ok(p) = data.lookup(purl) {
             packages.push(Some(p));
         } else {
-            return Err(ApiError::InvalidPackageUrl { purl: purl.to_string() })
+            packages.push(None);
         }
     }
     Ok(HttpResponse::Ok().json(packages))
@@ -120,7 +168,9 @@ pub async fn query_package_dependencies(body: Json<PackageList>) -> Result<HttpR
     for purl in body.list().iter() {
         if let Ok(purl) = PackageUrl::from_str(purl) {
         } else {
-            return Err(ApiError::InvalidPackageUrl { purl: purl.to_string() })
+            return Err(ApiError::InvalidPackageUrl {
+                purl: purl.to_string(),
+            });
         }
     }
     Ok(HttpResponse::Ok().json(dependencies))
@@ -134,12 +184,14 @@ pub async fn query_package_dependencies(body: Json<PackageList>) -> Result<HttpR
     ),
 )]
 #[get("/api/package/dependants")]
-pub async fn query_package_dependants(body: Json<PackageList>)-> Result<HttpResponse, ApiError> {
+pub async fn query_package_dependants(body: Json<PackageList>) -> Result<HttpResponse, ApiError> {
     let mut dependants: PackageDependants = PackageDependants(Vec::new());
     for purl in body.list().iter() {
         if let Ok(purl) = PackageUrl::from_str(purl) {
         } else {
-            return Err(ApiError::InvalidPackageUrl { purl: purl.to_string() })
+            return Err(ApiError::InvalidPackageUrl {
+                purl: purl.to_string(),
+            });
         }
     }
     Ok(HttpResponse::Ok().json(dependants))
@@ -148,10 +200,10 @@ pub async fn query_package_dependants(body: Json<PackageList>)-> Result<HttpResp
 #[derive(ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(Package {
     purl: Some("pkg:maven/org.apache.quarkus/quarkus@1.2".to_string()),
-    href: Some("/api/package?purl=foo".to_string()),
+    href: Some(format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2"))),
     trustedVersions: vec![PackageRef {
         purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
-        href: "/api/package?purl=foo".to_string(),
+        href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
     }],
     vulnerabilities: vec![VulnerabilityRef {
         cve: "CVE-1234".into(),
@@ -161,15 +213,15 @@ pub async fn query_package_dependants(body: Json<PackageList>)-> Result<HttpResp
 }))]
 pub struct Package {
     #[serde(skip_serializing_if = "Option::is_none")]
-    purl: Option<String>,
+    pub purl: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    href: Option<String>,
+    pub href: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    trustedVersions: Vec<PackageRef>,
+    pub trustedVersions: Vec<PackageRef>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    vulnerabilities: Vec<VulnerabilityRef>,
+    pub vulnerabilities: Vec<VulnerabilityRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    snyk: Option<SnykData>,
+    pub snyk: Option<SnykData>,
 }
 
 #[derive(ToSchema, Serialize, Deserialize)]
@@ -185,11 +237,11 @@ pub struct VulnerabilityRef {
 #[derive(ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(PackageRef {
     purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
-    href: "/api/package?purl=foo".to_string(),
+    href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
 }))]
 pub struct PackageRef {
-    purl: String,
-    href: String,
+    pub purl: String,
+    pub href: String,
 }
 
 #[derive(ToSchema, Serialize, Deserialize)]

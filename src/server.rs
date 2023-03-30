@@ -7,13 +7,11 @@ use std::{
 use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     middleware::Logger,
-    web::Data,
     web,
+    web::Data,
     App, HttpResponse, HttpServer,
 };
-use utoipa::{
-    Modify, OpenApi,
-};
+use utoipa::{Modify, OpenApi};
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::package;
@@ -24,9 +22,8 @@ pub struct Server {
     port: u16,
 }
 
-
 #[derive(OpenApi)]
-    #[openapi(
+#[openapi(
         paths(
             package::get_package,
             package::query_package,
@@ -55,12 +52,10 @@ impl Server {
         HttpServer::new(move || {
             App::new()
                 .wrap(Logger::default())
+                .data(package::TrustedGav::new())
                 .configure(package::configure())
                 .configure(vulnerability::configure())
-                .service(
-                    SwaggerUi::new("/swagger-ui/{_:.*}")
-                        .url("/openapi.json", openapi.clone()),
-                )
+                .service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/openapi.json", openapi.clone()))
         })
         .bind((self.bind, self.port))?
         .run()
