@@ -27,4 +27,5 @@ futures = "0.3"
 utoipa = { version = "3", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "3", features = ["actix-web"] }
 urlencoding = "2.1.2"
-guac = { package = "guac-rs", git = "https://github.com/dejanb/guac-rs.git", branch = "main" }
+#guac = { package = "guac-rs", git = "https://github.com/dejanb/guac-rs.git", branch = "main" }
+guac = { package = "guac-rs", path = "../guac-rs/lib" }

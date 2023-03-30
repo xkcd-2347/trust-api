@@ -2,13 +2,13 @@ use actix_web::{
     error, get, http::StatusCode, post, web, web::Json, web::ServiceConfig, HttpResponse, Responder,
 };
 use core::str::FromStr;
+use guac::client::GuacClient;
 use packageurl::PackageUrl;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use thiserror::Error;
 use utoipa::ToSchema;
-use guac::{client::GuacClient};
 
 pub(crate) fn configure() -> impl FnOnce(&mut ServiceConfig) {
     |config: &mut ServiceConfig| {
@@ -47,7 +47,7 @@ impl TrustedContent {
         Self { data, client }
     }
 
-    fn lookup(&self, purl: &str) -> Result<Package, ApiError> {
+    fn get_trusted(&self, purl: &str) -> Result<Package, ApiError> {
         if let Ok(purl) = PackageUrl::from_str(&purl) {
             let query_purl = format!(
                 "pkg:{}/{}/{}@{}",
@@ -56,9 +56,9 @@ impl TrustedContent {
                 purl.name(),
                 purl.version().unwrap()
             );
-            let mut trustedVersions = Vec::new();
+            let mut trusted_versions = Vec::new();
             if let Some(p) = self.data.get(&query_purl) {
-                trustedVersions.push(PackageRef {
+                trusted_versions.push(PackageRef {
                     purl: p.clone(),
                     href: format!("/api/package?purl={}", &urlencoding::encode(&p)),
                 });
@@ -69,7 +69,7 @@ impl TrustedContent {
                     "/api/package?purl={}",
                     &urlencoding::encode(&purl.to_string())
                 )),
-                trustedVersions,
+                trusted_versions,
                 snyk: None,
                 vulnerabilities: Vec::new(),
             };
@@ -80,6 +80,36 @@ impl TrustedContent {
             })
         }
     }
+
+    async fn get_dependencies(&self, purl: &str) -> Result<PackageDependencies, ApiError> {
+        let deps = self
+            .client
+            .get_dependencies(purl)
+            .await
+            .map_err(|_| ApiError::InternalError)?;
+
+        let mut ret = Vec::new();
+        for dep in deps.iter() {
+            let pkg = &dep.dependent_package;
+            let t = &pkg.type_;
+            for namespace in pkg.namespaces.iter() {
+                for name in namespace.names.iter() {
+                    for version in name.versions.iter() {
+                        let purl = format!(
+                            "pkg:{}/{}/{}@{}",
+                            t, namespace.namespace, name.name, version.version
+                        );
+                        let p = PackageRef {
+                            purl: purl.clone(),
+                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                        };
+                        ret.push(p);
+                    }
+                }
+            }
+        }
+        Ok(PackageDependencies(ret))
+    }
 }
 
 #[utoipa::path(
@@ -88,7 +118,7 @@ impl TrustedContent {
         (status = NOT_FOUND, description = "Package not found", body = Package, example = json!(Package {
             purl: None,
             href: None,
-            trustedVersions: vec![PackageRef {
+            trusted_versions: vec![PackageRef {
                 purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
                 href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
             }],
@@ -108,7 +138,7 @@ pub async fn get_package(
     query: web::Query<PackageQuery>,
 ) -> Result<HttpResponse, ApiError> {
     if let Some(purl) = &query.purl {
-        let p = data.lookup(purl)?;
+        let p = data.get_trusted(purl)?;
         Ok(HttpResponse::Ok().json(p))
     } else {
         Err(ApiError::MissingQueryArgument)
@@ -132,7 +162,7 @@ impl PackageList {
         (status = NOT_FOUND, description = "Package not found", body = Package, example = json!(Package {
             purl: None,
             href: None,
-            trustedVersions: vec![PackageRef {
+            trusted_versions: vec![PackageRef {
                 purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
                 href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
             }],
@@ -149,7 +179,7 @@ pub async fn query_package(
 ) -> Result<HttpResponse, ApiError> {
     let mut packages: Vec<Option<Package>> = Vec::new();
     for purl in body.list().iter() {
-        if let Ok(p) = data.lookup(purl) {
+        if let Ok(p) = data.get_trusted(purl) {
             packages.push(Some(p));
         } else {
             packages.push(None);
@@ -161,15 +191,20 @@ pub async fn query_package(
 #[utoipa::path(
     request_body = PackageList,
     responses(
-        (status = 200, description = "Package found", body = PackageDependencies),
+        (status = 200, description = "Package found", body = Vec<PackageDependencies>),
         (status = BAD_REQUEST, description = "Invalid package URL"),
     ),
 )]
-#[get("/api/package/dependencies")]
-pub async fn query_package_dependencies(body: Json<PackageList>) -> Result<HttpResponse, ApiError> {
-    let mut dependencies: PackageDependencies = PackageDependencies(Vec::new());
+#[post("/api/package/dependencies")]
+pub async fn query_package_dependencies(
+    data: web::Data<TrustedContent>,
+    body: Json<PackageList>,
+) -> Result<HttpResponse, ApiError> {
+    let mut dependencies: Vec<PackageDependencies> = Vec::new();
     for purl in body.list().iter() {
-        if let Ok(purl) = PackageUrl::from_str(purl) {
+        if let Ok(_) = PackageUrl::from_str(purl) {
+            let lst = data.get_dependencies(purl).await?;
+            dependencies.push(lst);
         } else {
             return Err(ApiError::InvalidPackageUrl {
                 purl: purl.to_string(),
@@ -182,13 +217,13 @@ pub async fn query_package_dependencies(body: Json<PackageList>) -> Result<HttpR
 #[utoipa::path(
     request_body = PackageList,
     responses(
-        (status = 200, description = "Package found", body = PackageDependants),
+        (status = 200, description = "Package found", body = Vec<PackageDependants>),
         (status = BAD_REQUEST, description = "Invalid package URL"),
     ),
 )]
-#[get("/api/package/dependants")]
+#[post("/api/package/dependants")]
 pub async fn query_package_dependants(body: Json<PackageList>) -> Result<HttpResponse, ApiError> {
-    let mut dependants: PackageDependants = PackageDependants(Vec::new());
+    let mut dependants: Vec<PackageDependants> = Vec::new();
     for purl in body.list().iter() {
         if let Ok(purl) = PackageUrl::from_str(purl) {
         } else {
@@ -204,7 +239,7 @@ pub async fn query_package_dependants(body: Json<PackageList>) -> Result<HttpRes
 #[schema(example = json!(Package {
     purl: Some("pkg:maven/org.apache.quarkus/quarkus@1.2".to_string()),
     href: Some(format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2"))),
-    trustedVersions: vec![PackageRef {
+    trusted_versions: vec![PackageRef {
         purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
         href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
     }],
@@ -220,7 +255,8 @@ pub struct Package {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub href: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub trustedVersions: Vec<PackageRef>,
+    #[serde(rename = "trustedVersions")]
+    pub trusted_versions: Vec<PackageRef>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub vulnerabilities: Vec<VulnerabilityRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -264,6 +300,8 @@ pub enum ApiError {
     PackageNotFound { purl: String },
     #[error("{purl} is not a valid package URL")]
     InvalidPackageUrl { purl: String },
+    #[error("Error processing error internally")]
+    InternalError,
 }
 
 impl error::ResponseError for ApiError {
@@ -279,6 +317,7 @@ impl error::ResponseError for ApiError {
             ApiError::MissingQueryArgument => StatusCode::BAD_REQUEST,
             ApiError::PackageNotFound { purl } => StatusCode::NOT_FOUND,
             ApiError::InvalidPackageUrl { purl } => StatusCode::BAD_REQUEST,
+            ApiError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
