@@ -82,11 +82,10 @@ impl TrustedContent {
     }
 
     async fn get_dependencies(&self, purl: &str) -> Result<PackageDependencies, ApiError> {
-        let deps = self
-            .client
-            .get_dependencies(purl)
-            .await
-            .map_err(|_| ApiError::InternalError)?;
+        let deps = self.client.get_dependencies(purl).await.map_err(|e| {
+            log::warn!("Error getting dependencies from GUAC: {:?}", e);
+            ApiError::InternalError
+        })?;
 
         let mut ret = Vec::new();
         for dep in deps.iter() {

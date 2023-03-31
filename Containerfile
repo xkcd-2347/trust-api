@@ -4,5 +4,6 @@ ADD /target/release/trust-api /
 ENV RUST_LOG info
 
 EXPOSE 8080
+EXPOSE 8081
 
-ENTRYPOINT ["/trust-api", "run", "-p", "8080"]
+ENTRYPOINT ["/trust-api"]
