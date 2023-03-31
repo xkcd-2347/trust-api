@@ -47,6 +47,7 @@ impl TrustedContent {
         Self { data, client }
     }
 
+    // TODO: Use GUAC instead of the internal hashmap for package lookup
     fn get_trusted(&self, purl: &str) -> Result<Package, ApiError> {
         if let Ok(purl) = PackageUrl::from_str(&purl) {
             let query_purl = format!(
