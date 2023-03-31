@@ -1,0 +1,5 @@
+FROM ghcr.io/dejanb/local-organic-guac
+
+ADD data/files /data
+
+ENTRYPOINT ["/opt/guac/guacone", "files", "/data"]
