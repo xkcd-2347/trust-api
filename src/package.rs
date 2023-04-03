@@ -110,6 +110,35 @@ impl TrustedContent {
         }
         Ok(PackageDependencies(ret))
     }
+
+    async fn get_dependants(&self, purl: &str) -> Result<PackageDependencies, ApiError> {
+        let deps = self.client.is_dependent(purl).await.map_err(|e| {
+            log::warn!("Error getting dependencies from GUAC: {:?}", e);
+            ApiError::InternalError
+        })?;
+
+        let mut ret = Vec::new();
+        for dep in deps.iter() {
+            let pkg = &dep.package;
+            let t = &pkg.type_;
+            for namespace in pkg.namespaces.iter() {
+                for name in namespace.names.iter() {
+                    for version in name.versions.iter() {
+                        let purl = format!(
+                            "pkg:{}/{}/{}@{}",
+                            t, namespace.namespace, name.name, version.version
+                        );
+                        let p = PackageRef {
+                            purl: purl.clone(),
+                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                        };
+                        ret.push(p);
+                    }
+                }
+            }
+        }
+        Ok(PackageDependencies(ret))
+    }
 }
 
 #[utoipa::path(
@@ -222,17 +251,22 @@ pub async fn query_package_dependencies(
     ),
 )]
 #[post("/api/package/dependants")]
-pub async fn query_package_dependants(body: Json<PackageList>) -> Result<HttpResponse, ApiError> {
-    let mut dependants: Vec<PackageDependants> = Vec::new();
+pub async fn query_package_dependants(
+    data: web::Data<TrustedContent>,
+    body: Json<PackageList>
+) -> Result<HttpResponse, ApiError> {
+    let mut dependencies: Vec<PackageDependencies> = Vec::new();
     for purl in body.list().iter() {
-        if let Ok(purl) = PackageUrl::from_str(purl) {
+        if let Ok(_) = PackageUrl::from_str(purl) {
+            let lst = data.get_dependants(purl).await?;
+            dependencies.push(lst);
         } else {
             return Err(ApiError::InvalidPackageUrl {
                 purl: purl.to_string(),
             });
         }
     }
-    Ok(HttpResponse::Ok().json(dependants))
+    Ok(HttpResponse::Ok().json(dependencies))
 }
 
 #[derive(ToSchema, Serialize, Deserialize)]
