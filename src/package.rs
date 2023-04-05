@@ -47,23 +47,28 @@ impl TrustedContent {
         Self { data, client }
     }
 
-    // TODO: Use GUAC instead of the internal hashmap for package lookup
-    fn get_trusted(&self, purl: &str) -> Result<Package, ApiError> {
+    async fn get_trusted(&self, purl: &str) -> Result<Package, ApiError> {
         if let Ok(purl) = PackageUrl::from_str(&purl) {
-            let query_purl = format!(
-                "pkg:{}/{}/{}@{}",
-                purl.ty(),
-                purl.namespace().unwrap(),
-                purl.name(),
-                purl.version().unwrap()
-            );
-            let mut trusted_versions = Vec::new();
-            if let Some(p) = self.data.get(&query_purl) {
-                trusted_versions.push(PackageRef {
-                    purl: p.clone(),
-                    href: format!("/api/package?purl={}", &urlencoding::encode(&p)),
-                });
+            //get related packages from guac
+            let mut trusted_versions: Vec<PackageRef> = self.get_packages(purl.clone()).await?;
+
+            //get trusted gav versions
+            if purl.version().is_some() && purl.namespace().is_some() {
+                let query_purl = format!(
+                    "pkg:{}/{}/{}@{}",
+                    purl.ty(),
+                    purl.namespace().unwrap(),
+                    purl.name(),
+                    purl.version().unwrap()
+                );
+                if let Some(p) = self.data.get(&query_purl) {
+                    trusted_versions.push(PackageRef {
+                        purl: p.clone(),
+                        href: format!("/api/package?purl={}", &urlencoding::encode(&p)),
+                    });
+                }
             }
+
             let p = Package {
                 purl: Some(purl.to_string()),
                 href: Some(format!(
@@ -80,6 +85,43 @@ impl TrustedContent {
                 purl: purl.to_string(),
             })
         }
+    }
+
+    async fn get_packages(&self, purl: PackageUrl<'_>) -> Result<Vec<PackageRef>, ApiError> {
+
+        //strip version to search for all related packages
+        let query_purl = format!(
+            "pkg:{}/{}/{}",
+            purl.ty(),
+            purl.namespace().unwrap(),
+            purl.name(),
+        );
+
+        let pkgs = self.client.get_packages(&query_purl).await.map_err(|e| {
+            log::warn!("Error getting packages from GUAC: {:?}", e);
+            ApiError::InternalError
+        })?;
+
+        let mut ret = Vec::new();
+        for pkg in pkgs.iter() {
+            let t = &pkg.type_;
+            for namespace in pkg.namespaces.iter() {
+                for name in namespace.names.iter() {
+                    for version in name.versions.iter() {
+                        let purl = format!(
+                            "pkg:{}/{}/{}@{}",
+                            t, namespace.namespace, name.name, version.version
+                        );
+                        let p = PackageRef {
+                            purl: purl.clone(),
+                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                        };
+                        ret.push(p);
+                    }
+                }
+            }
+        }
+        Ok(ret)
     }
 
     async fn get_dependencies(&self, purl: &str) -> Result<PackageDependencies, ApiError> {
@@ -167,7 +209,7 @@ pub async fn get_package(
     query: web::Query<PackageQuery>,
 ) -> Result<HttpResponse, ApiError> {
     if let Some(purl) = &query.purl {
-        let p = data.get_trusted(purl)?;
+        let p = data.get_trusted(purl).await?;
         Ok(HttpResponse::Ok().json(p))
     } else {
         Err(ApiError::MissingQueryArgument)
@@ -208,7 +250,7 @@ pub async fn query_package(
 ) -> Result<HttpResponse, ApiError> {
     let mut packages: Vec<Option<Package>> = Vec::new();
     for purl in body.list().iter() {
-        if let Ok(p) = data.get_trusted(purl) {
+        if let Ok(p) = data.get_trusted(purl).await {
             packages.push(Some(p));
         } else {
             packages.push(None);
