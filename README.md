@@ -42,7 +42,11 @@ You can also run the API server using a container:
 podman run -p 8080:8080 -ti ghcr.io/xkcd-2347/trust-api:latest run -p 8081 
 ```
 
-### Example usage
+### Example usages
+
+```
+curl --json '["pkg:maven/io.quarkus/quarkus-vertx@2.13.7.Final"]' http://localhost:8081/api/package | jq
+```
 
 ```
 curl --json '["pkg:maven/io.vertx/vertx-web@4.3.7"]' http://localhost:8081/api/package/dependants | jq
