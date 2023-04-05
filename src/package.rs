@@ -140,6 +140,7 @@ impl TrustedContent {
                 Package {
                     purl: Some(k.clone()),
                     href: None,
+                    trusted: Some(false),
                     trusted_versions: vec![
                         PackageRef{
                             purl: v.clone(),
@@ -147,6 +148,7 @@ impl TrustedContent {
                                 "/api/package?purl={}",
                                 &urlencoding::encode(&v.to_string())
                             ),
+                            trusted: Some(true),
                         }
                     ],
                     vulnerabilities: vec![],
