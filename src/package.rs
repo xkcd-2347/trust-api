@@ -65,6 +65,7 @@ impl TrustedContent {
                     trusted_versions.push(PackageRef {
                         purl: p.clone(),
                         href: format!("/api/package?purl={}", &urlencoding::encode(&p)),
+                        trusted: Some(true),
                     });
                 }
             }
@@ -75,6 +76,7 @@ impl TrustedContent {
                     "/api/package?purl={}",
                     &urlencoding::encode(&purl.to_string())
                 )),
+                trusted: Some(self.is_trusted(purl.clone())),
                 trusted_versions,
                 snyk: None,
                 vulnerabilities: Vec::new(),
@@ -115,6 +117,7 @@ impl TrustedContent {
                         let p = PackageRef {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                            trusted: Some(false),
                         };
                         ret.push(p);
                     }
@@ -122,6 +125,11 @@ impl TrustedContent {
             }
         }
         Ok(ret)
+    }
+
+    // temp fn to decide if the package is trusted based on its version
+    fn is_trusted(&self, purl: PackageUrl<'_>) -> bool {
+        purl.version().map_or(false, |v| v.contains("redhat"))
     }
 
     async fn get_dependencies(&self, purl: &str) -> Result<PackageDependencies, ApiError> {
@@ -144,6 +152,7 @@ impl TrustedContent {
                         let p = PackageRef {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                            trusted: None,
                         };
                         ret.push(p);
                     }
@@ -173,6 +182,7 @@ impl TrustedContent {
                         let p = PackageRef {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                            trusted: None,
                         };
                         ret.push(p);
                     }
@@ -189,9 +199,11 @@ impl TrustedContent {
         (status = NOT_FOUND, description = "Package not found", body = Package, example = json!(Package {
             purl: None,
             href: None,
+            trusted: None,
             trusted_versions: vec![PackageRef {
                 purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
                 href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
+                trusted: None,
             }],
             vulnerabilities: Vec::new(),
             snyk: None,
@@ -233,9 +245,11 @@ impl PackageList {
         (status = NOT_FOUND, description = "Package not found", body = Package, example = json!(Package {
             purl: None,
             href: None,
+            trusted: None,
             trusted_versions: vec![PackageRef {
                 purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
                 href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
+                trusted: None,
             }],
             vulnerabilities: Vec::new(),
             snyk: None,
@@ -315,9 +329,11 @@ pub async fn query_package_dependants(
 #[schema(example = json!(Package {
     purl: Some("pkg:maven/org.apache.quarkus/quarkus@1.2".to_string()),
     href: Some(format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2"))),
+    trusted: Some(true),
     trusted_versions: vec![PackageRef {
         purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
         href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
+        trusted: Some(true)
     }],
     vulnerabilities: vec![VulnerabilityRef {
         cve: "CVE-1234".into(),
@@ -330,6 +346,8 @@ pub struct Package {
     pub purl: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub href: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trusted: Option<bool>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(rename = "trustedVersions")]
     pub trusted_versions: Vec<PackageRef>,
@@ -353,10 +371,13 @@ pub struct VulnerabilityRef {
 #[schema(example = json!(PackageRef {
     purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
     href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
+    trusted: Some(true)
 }))]
 pub struct PackageRef {
     pub purl: String,
     pub href: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trusted: Option<bool>,
 }
 
 #[derive(ToSchema, Serialize, Deserialize)]
