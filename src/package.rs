@@ -15,6 +15,7 @@ pub(crate) fn configure() -> impl FnOnce(&mut ServiceConfig) {
         config.service(query_package);
         config.service(query_package_dependencies);
         config.service(query_package_dependants);
+        config.service( get_trusted);
     }
 }
 
@@ -130,6 +131,30 @@ impl TrustedContent {
     // temp fn to decide if the package is trusted based on its version
     fn is_trusted(&self, purl: PackageUrl<'_>) -> bool {
         purl.version().map_or(false, |v| v.contains("redhat"))
+    }
+
+    fn get_all_trusted(&self) -> Result<Vec<Package>, ApiError> {
+        let mut trusted_versions = Vec::new();
+        for (k, v) in &self.data {
+            trusted_versions.push(
+                Package {
+                    purl: Some(k.clone()),
+                    href: None,
+                    trusted_versions: vec![
+                        PackageRef{
+                            purl: v.clone(),
+                            href: format!(
+                                "/api/package?purl={}",
+                                &urlencoding::encode(&v.to_string())
+                            ),
+                        }
+                    ],
+                    vulnerabilities: vec![],
+                    snyk: None,
+                }
+            );
+        }
+        Ok(trusted_versions)
     }
 
     async fn get_dependencies(&self, purl: &str) -> Result<PackageDependencies, ApiError> {
@@ -258,6 +283,13 @@ pub async fn get_package(
     } else {
         Err(ApiError::MissingQueryArgument)
     }
+}
+
+#[get("/api/trusted")]
+pub async fn get_trusted(
+    data: web::Data<TrustedContent>,
+) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Ok().json(data.get_all_trusted()? ))
 }
 
 #[derive(ToSchema, Serialize, Deserialize, Debug)]
