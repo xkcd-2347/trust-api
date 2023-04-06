@@ -35,7 +35,11 @@ impl Cli {
 
     async fn run_command(self) -> anyhow::Result<ExitCode> {
         match self.command {
-            Command::Run(Run { bind, port, guac_url }) => {
+            Command::Run(Run {
+                bind,
+                port,
+                guac_url,
+            }) => {
                 let s = server::Server::new(bind, port, guac_url);
                 s.run().await?;
             }
@@ -53,8 +57,12 @@ pub struct Run {
     #[arg(short = 'p', long = "port", default_value_t = 8080)]
     pub(crate) port: u16,
 
-    #[arg(short = 'g', long = "guac", default_value = "http://localhost:8080/query")]
-    pub(crate) guac_url: String
+    #[arg(
+        short = 'g',
+        long = "guac",
+        default_value = "http://localhost:8080/query"
+    )]
+    pub(crate) guac_url: String,
 }
 
 #[tokio::main]

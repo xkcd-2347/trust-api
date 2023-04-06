@@ -1,17 +1,6 @@
-use std::{
-    error::Error,
-    future::{self, Ready},
-    net::Ipv4Addr,
-};
-
-use actix_web::{
-    dev::{Service, ServiceRequest, ServiceResponse, Transform},
-    middleware::Logger,
-    web,
-    web::Data,
-    App, HttpResponse, HttpServer,
-};
-use utoipa::{Modify, OpenApi};
+use actix_web::web::Data;
+use actix_web::{middleware::Logger, App, HttpServer};
+use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::package;
@@ -44,7 +33,11 @@ pub struct ApiDoc;
 
 impl Server {
     pub fn new(bind: String, port: u16, guac_url: String) -> Self {
-        Self { bind, port, guac_url }
+        Self {
+            bind,
+            port,
+            guac_url,
+        }
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
@@ -53,7 +46,7 @@ impl Server {
         HttpServer::new(move || {
             App::new()
                 .wrap(Logger::default())
-                .data(package::TrustedContent::new(&self.guac_url))
+                .app_data(Data::new(package::TrustedContent::new(&self.guac_url)))
                 .configure(package::configure())
                 .configure(vulnerability::configure())
                 .service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/openapi.json", openapi.clone()))

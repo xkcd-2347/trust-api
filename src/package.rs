@@ -1,11 +1,10 @@
 use actix_web::{
-    error, get, http::StatusCode, post, web, web::Json, web::ServiceConfig, HttpResponse, Responder,
+    error, get, http::StatusCode, post, web, web::Json, web::ServiceConfig, HttpResponse,
 };
 use core::str::FromStr;
 use guac::client::GuacClient;
 use packageurl::PackageUrl;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -48,7 +47,7 @@ impl TrustedContent {
     }
 
     async fn get_trusted(&self, purl: &str) -> Result<Package, ApiError> {
-        if let Ok(purl) = PackageUrl::from_str(&purl) {
+        if let Ok(purl) = PackageUrl::from_str(purl) {
             //get related packages from guac
             let mut trusted_versions: Vec<PackageRef> = self.get_packages(purl.clone()).await?;
 
@@ -64,7 +63,7 @@ impl TrustedContent {
                 if let Some(p) = self.data.get(&query_purl) {
                     trusted_versions.push(PackageRef {
                         purl: p.clone(),
-                        href: format!("/api/package?purl={}", &urlencoding::encode(&p)),
+                        href: format!("/api/package?purl={}", &urlencoding::encode(p)),
                         trusted: Some(true),
                     });
                 }
@@ -90,7 +89,6 @@ impl TrustedContent {
     }
 
     async fn get_packages(&self, purl: PackageUrl<'_>) -> Result<Vec<PackageRef>, ApiError> {
-
         //strip version to search for all related packages
         let query_purl = format!(
             "pkg:{}/{}/{}",
@@ -287,7 +285,7 @@ pub async fn query_package_dependencies(
 ) -> Result<HttpResponse, ApiError> {
     let mut dependencies: Vec<PackageDependencies> = Vec::new();
     for purl in body.list().iter() {
-        if let Ok(_) = PackageUrl::from_str(purl) {
+        if PackageUrl::from_str(purl).is_ok() {
             let lst = data.get_dependencies(purl).await?;
             dependencies.push(lst);
         } else {
@@ -309,11 +307,11 @@ pub async fn query_package_dependencies(
 #[post("/api/package/dependants")]
 pub async fn query_package_dependants(
     data: web::Data<TrustedContent>,
-    body: Json<PackageList>
+    body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
     let mut dependencies: Vec<PackageDependencies> = Vec::new();
     for purl in body.list().iter() {
-        if let Ok(_) = PackageUrl::from_str(purl) {
+        if PackageUrl::from_str(purl).is_ok() {
             let lst = data.get_dependants(purl).await?;
             dependencies.push(lst);
         } else {
@@ -412,8 +410,8 @@ impl error::ResponseError for ApiError {
     fn status_code(&self) -> StatusCode {
         match self {
             ApiError::MissingQueryArgument => StatusCode::BAD_REQUEST,
-            ApiError::PackageNotFound { purl } => StatusCode::NOT_FOUND,
-            ApiError::InvalidPackageUrl { purl } => StatusCode::BAD_REQUEST,
+            ApiError::PackageNotFound { purl: _ } => StatusCode::NOT_FOUND,
+            ApiError::InvalidPackageUrl { purl: _ } => StatusCode::BAD_REQUEST,
             ApiError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
