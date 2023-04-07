@@ -24,11 +24,17 @@ Start guac:
 podman run -p 8080:8080 -ti ghcr.io/dejanb/local-organic-guac /opt/guac/guacone gql-server --gql-debug
 ```
 
-Ingest test data:
+Ingest test SBOMs:
 
 ```
 podman run --net=host -v $PWD/data/files:/data:z -ti ghcr.io/dejanb/local-organic-guac /opt/guac/guacone files /data
 ```
+
+Run certifier:
+
+```
+ podman run --net=host -ti ghcr.io/dejanb/local-organic-guac /opt/guac/guacone certifier
+ ```
 
 Run the API server:
 

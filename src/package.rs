@@ -47,6 +47,8 @@ impl TrustedContent {
     }
 
     async fn get_trusted(&self, purl: &str) -> Result<Package, ApiError> {
+        let vulns = self.get_vulnerabilities(purl).await?;
+
         if let Ok(purl) = PackageUrl::from_str(purl) {
             //get related packages from guac
             let mut trusted_versions: Vec<PackageRef> = self.get_packages(purl.clone()).await?;
@@ -78,7 +80,7 @@ impl TrustedContent {
                 trusted: Some(self.is_trusted(purl.clone())),
                 trusted_versions,
                 snyk: None,
-                vulnerabilities: Vec::new(),
+                vulnerabilities: vulns,
             };
             Ok(p)
         } else {
@@ -188,6 +190,38 @@ impl TrustedContent {
             }
         }
         Ok(PackageDependencies(ret))
+    }
+
+    async fn get_vulnerabilities(&self, purl: &str) -> Result<Vec<VulnerabilityRef>, ApiError> {
+        let vulns = self.client.certify_vuln(purl).await.map_err(|e| {
+            log::warn!("Error getting vulnerabilities from GUAC: {:?}", e);
+            ApiError::InternalError
+        })?;
+
+        let mut ret = Vec::new();
+        for vuln in vulns.iter() {
+            match &vuln.vulnerability {
+                guac::vuln::certify_vuln::AllCertifyVulnTreeVulnerability::OSV(osv) => {
+                    let id = osv.osv_id.clone();
+                    let vuln_ref = VulnerabilityRef {
+                        cve: id.clone(),
+                        href: format!(
+                            "{}/{}",
+                            "https://osv.dev/vulnerability",
+                            id.replace("ghsa", "GHSA")
+                        ), //TODO fix guac id format
+                    };
+                    //TODO fix guac repeated entries
+                    if !ret.contains(&vuln_ref) {
+                        ret.push(vuln_ref);
+                    }
+                }
+                _ => {
+                    //TODO handle CVEs
+                }
+            };
+        }
+        Ok(ret)
     }
 }
 
@@ -355,7 +389,7 @@ pub struct Package {
     pub snyk: Option<SnykData>,
 }
 
-#[derive(ToSchema, Serialize, Deserialize)]
+#[derive(ToSchema, Serialize, Deserialize, PartialEq)]
 #[schema(example = json!(VulnerabilityRef {
     cve: "CVE-1234".into(),
     href: "/api/vulnerability/CVE-1234".into()
