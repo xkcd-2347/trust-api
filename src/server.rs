@@ -19,6 +19,7 @@ pub struct Server {
             package::query_package,
             package::query_package_dependencies,
             package::query_package_dependants,
+            package::query_package_versions,
             vulnerability::query_vulnerability,
         ),
         components(

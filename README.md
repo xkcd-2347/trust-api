@@ -61,3 +61,7 @@ curl --json '["pkg:maven/io.vertx/vertx-web@4.3.7"]' http://localhost:8081/api/p
 ```
 curl --json '["pkg:maven/io.vertx/vertx-web@4.3.7"]' http://localhost:8081/api/package/dependencies | jq
 ```
+
+```
+curl --json '["pkg:maven/io.vertx/vertx-web@4.3.7"]' http://localhost:8081/api/package/versions | jq
+```
