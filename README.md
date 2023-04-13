@@ -21,19 +21,19 @@ curl --json '["pkg:maven/org.quarkus/quarkus@1.2"]' http://localhost:8080/api/pa
 Start guac:
 
 ``` 4d
-podman run -p 8080:8080 -ti ghcr.io/dejanb/local-organic-guac /opt/guac/guacone gql-server --gql-debug
+podman run -p 8080:8080 -ti ghcr.io/xkcd-2347/guac:latest gql-server --gql-debug
 ```
 
 Ingest test SBOMs:
 
 ```
-podman run --net=host -v $PWD/data/files:/data:z -ti ghcr.io/dejanb/local-organic-guac /opt/guac/guacone files /data
+podman run --net=host -v $PWD/data/files:/data:z -ti ghcr.io/xkcd-2347/guac:latest files /data
 ```
 
 Run certifier:
 
 ```
- podman run --net=host -ti ghcr.io/dejanb/local-organic-guac /opt/guac/guacone certifier
+ podman run --net=host -ti ghcr.io/xkcd-2347/guac:latest certifier
  ```
 
 Run the API server:

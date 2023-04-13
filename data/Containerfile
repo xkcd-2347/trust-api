@@ -1,5 +1,5 @@
-FROM ghcr.io/dejanb/local-organic-guac
+FROM ghcr.io/xkcd-2347/guac:latest
 
 ADD data/files /data
 
-ENTRYPOINT ["/opt/guac/guacone", "files", "/data"]
+ENTRYPOINT ["/guacone", "files", "/data"]
