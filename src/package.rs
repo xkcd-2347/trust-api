@@ -15,7 +15,8 @@ pub(crate) fn configure() -> impl FnOnce(&mut ServiceConfig) {
         config.service(query_package);
         config.service(query_package_dependencies);
         config.service(query_package_dependants);
-        config.service( get_trusted);
+        config.service(get_trusted);
+        config.service(query_package_versions);
     }
 }
 
@@ -47,10 +48,10 @@ impl TrustedContent {
         Self { data, client }
     }
 
-    async fn get_trusted(&self, purl: &str) -> Result<Package, ApiError> {
-        let vulns = self.get_vulnerabilities(purl).await?;
+    async fn get_trusted(&self, purl_str: &str) -> Result<Package, ApiError> {
+        if let Ok(purl) = PackageUrl::from_str(purl_str) {
+            let vulns = self.get_vulnerabilities(purl_str).await?;
 
-        if let Ok(purl) = PackageUrl::from_str(purl) {
             //get related packages from guac
             let mut trusted_versions: Vec<PackageRef> = self.get_packages(purl.clone()).await?;
 
@@ -86,7 +87,32 @@ impl TrustedContent {
             Ok(p)
         } else {
             Err(ApiError::InvalidPackageUrl {
-                purl: purl.to_string(),
+                purl: purl_str.to_string(),
+            })
+        }
+    }
+
+    async fn get_versions(&self, purl_str: &str) -> Result<Vec<PackageRef>, ApiError> {
+        if let Ok(purl) = PackageUrl::from_str(purl_str) {
+            //get related packages from guac
+            let mut trusted_versions: Vec<PackageRef> = self.get_packages(purl.clone()).await?;
+
+            for (key, value) in self.data.iter() {
+                if let Ok(p) = PackageUrl::from_str(key) {
+                    if p.name() == purl.name() {
+                        trusted_versions.push(PackageRef {
+                            purl: value.clone(),
+                            href: format!("/api/package?purl={}", &urlencoding::encode(value)),
+                            trusted: Some(true),
+                        });
+                    }
+                }
+            }
+
+            Ok(trusted_versions)
+        } else {
+            Err(ApiError::InvalidPackageUrl {
+                purl: purl_str.to_string(),
             })
         }
     }
@@ -104,7 +130,6 @@ impl TrustedContent {
             log::warn!("Error getting packages from GUAC: {:?}", e);
             ApiError::InternalError
         })?;
-
         let mut ret = Vec::new();
         for pkg in pkgs.iter() {
             let t = &pkg.type_;
@@ -136,25 +161,18 @@ impl TrustedContent {
     fn get_all_trusted(&self) -> Result<Vec<Package>, ApiError> {
         let mut trusted_versions = Vec::new();
         for (k, v) in &self.data {
-            trusted_versions.push(
-                Package {
-                    purl: Some(k.clone()),
-                    href: None,
-                    trusted: Some(false),
-                    trusted_versions: vec![
-                        PackageRef{
-                            purl: v.clone(),
-                            href: format!(
-                                "/api/package?purl={}",
-                                &urlencoding::encode(&v.to_string())
-                            ),
-                            trusted: Some(true),
-                        }
-                    ],
-                    vulnerabilities: vec![],
-                    snyk: None,
-                }
-            );
+            trusted_versions.push(Package {
+                purl: Some(k.clone()),
+                href: None,
+                trusted: Some(false),
+                trusted_versions: vec![PackageRef {
+                    purl: v.clone(),
+                    href: format!("/api/package?purl={}", &urlencoding::encode(&v.to_string())),
+                    trusted: Some(true),
+                }],
+                vulnerabilities: vec![],
+                snyk: None,
+            });
         }
         Ok(trusted_versions)
     }
@@ -288,10 +306,8 @@ pub async fn get_package(
 }
 
 #[get("/api/trusted")]
-pub async fn get_trusted(
-    data: web::Data<TrustedContent>,
-) -> Result<HttpResponse, ApiError> {
-    Ok(HttpResponse::Ok().json(data.get_all_trusted()? ))
+pub async fn get_trusted(data: web::Data<TrustedContent>) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Ok().json(data.get_all_trusted()?))
 }
 
 #[derive(ToSchema, Serialize, Deserialize, Debug)]
@@ -391,6 +407,31 @@ pub async fn query_package_dependants(
     Ok(HttpResponse::Ok().json(dependencies))
 }
 
+#[utoipa::path(
+    request_body = PackageList,
+    responses(
+        (status = 200, description = "Package found", body = Vec<PackageRef>),
+        (status = BAD_REQUEST, description = "Invalid package URL"),
+    ),
+)]
+#[post("/api/package/versions")]
+pub async fn query_package_versions(
+    data: web::Data<TrustedContent>,
+    body: Json<PackageList>,
+) -> Result<HttpResponse, ApiError> {
+    let mut versions = Vec::new();
+    for purl_str in body.list().iter() {
+        if PackageUrl::from_str(purl_str).is_ok() {
+            versions = data.get_versions(purl_str).await?;
+        } else {
+            return Err(ApiError::InvalidPackageUrl {
+                purl: purl_str.to_string(),
+            });
+        }
+    }
+    Ok(HttpResponse::Ok().json(versions))
+}
+
 #[derive(ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(Package {
     purl: Some("pkg:maven/org.apache.quarkus/quarkus@1.2".to_string()),
@@ -433,7 +474,7 @@ pub struct VulnerabilityRef {
     href: String,
 }
 
-#[derive(ToSchema, Serialize, Deserialize)]
+#[derive(ToSchema, Serialize, Deserialize, Debug)]
 #[schema(example = json!(PackageRef {
     purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
     href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
