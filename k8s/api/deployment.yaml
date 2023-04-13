@@ -18,6 +18,8 @@ spec:
         - image: ghcr.io/xkcd-2347/trust-api:latest
           imagePullPolicy: Always
           name: trusted-api
+          command: ["/trust-api"]
+          args: ["run", "-p", "8080", "-g", "http://guac:8080/query"]
           ports:
             - containerPort: 8080
               protocol: TCP

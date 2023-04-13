@@ -5,18 +5,12 @@ metadata:
     app: guac-data
   name: guac-data
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: guac-data
   template:
-    metadata:
-      labels:
-        app: guac-data
     spec:
       restartPolicy: OnFailure
       containers:
         - image: ghcr.io/xkcd-2347/guac-data:latest
           imagePullPolicy: Always
-          args: ["files", "--gql-endpoint", "http://guac:8080/query"]
+          command: ["/guacone"]
+          args: ["--gql-endpoint", "http://guac:8080/query", "files", "/data"]
           name: guac-data
