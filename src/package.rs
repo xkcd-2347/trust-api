@@ -143,7 +143,7 @@ impl TrustedContent {
                         let p = PackageRef {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: Some(false),
+                            trusted: Some(namespace.namespace == "redhat")
                         };
                         ret.push(p);
                     }
@@ -153,9 +153,9 @@ impl TrustedContent {
         Ok(ret)
     }
 
-    // temp fn to decide if the package is trusted based on its version
+    // temp fn to decide if the package is trusted based on its version or namespace
     fn is_trusted(&self, purl: PackageUrl<'_>) -> bool {
-        purl.version().map_or(false, |v| v.contains("redhat"))
+        purl.version().map_or(false, |v| v.contains("redhat")) || purl.namespace().map_or(false, |v| v == "redhat")
     }
 
     fn get_all_trusted(&self) -> Result<Vec<Package>, ApiError> {
@@ -261,8 +261,20 @@ impl TrustedContent {
                         ret.push(vuln_ref);
                     }
                 }
+                guac::vuln::certify_vuln::AllCertifyVulnTreeVulnerability::CVE(id) => {
+                    let vuln_ref = VulnerabilityRef {
+                        cve: id.cve_id.clone(),
+                        href: format!(
+                            "https://access.redhat.com/security/cve/{}",
+                            id.cve_id.to_lowercase()
+                        ), //TODO fix guac id format
+                    };
+                    //TODO fix guac repeated entries
+                    if !ret.contains(&vuln_ref) {
+                        ret.push(vuln_ref);
+                    }
+                }
                 _ => {
-                    //TODO handle CVEs
                 }
             };
         }
@@ -305,6 +317,11 @@ pub async fn get_package(
     }
 }
 
+#[utoipa::path(
+    responses(
+        (status = 200, description = "Get the entire inventory", body = Vec<Package>),
+    )
+)]
 #[get("/api/trusted")]
 pub async fn get_trusted(data: web::Data<TrustedContent>) -> Result<HttpResponse, ApiError> {
     Ok(HttpResponse::Ok().json(data.get_all_trusted()?))
