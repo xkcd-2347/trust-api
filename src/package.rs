@@ -158,7 +158,7 @@ impl TrustedContent {
         purl.version().map_or(false, |v| v.contains("redhat")) || purl.namespace().map_or(false, |v| v == "redhat")
     }
 
-    fn get_all_trusted(&self) -> Result<Vec<Package>, ApiError> {
+    async fn get_all_trusted(&self) -> Result<Vec<Package>, ApiError> {
         let mut trusted_versions = Vec::new();
         for (k, v) in &self.data {
             trusted_versions.push(Package {
@@ -173,6 +173,34 @@ impl TrustedContent {
                 vulnerabilities: vec![],
                 snyk: None,
             });
+        }
+
+        let all_packages = self.client.get_all_packages().await.map_err(|_| ApiError::InternalError)?;
+        for pkg in all_packages.iter() {
+            let t = &pkg.type_;
+            for namespace in pkg.namespaces.iter() {
+                for name in namespace.names.iter() {
+                    for version in name.versions.iter() {
+                        let purl = format!(
+                            "pkg:{}/{}/{}@{}",
+                            t, namespace.namespace, name.name, version.version
+                        );
+                        let vulns = self.get_vulnerabilities(&purl).await?;
+                        let p = Package {
+                            purl: Some(purl.to_string()),
+                            href: Some(format!(
+                                "/api/package?purl={}",
+                                &urlencoding::encode(&purl.to_string())
+                            )),
+                            trusted: Some(namespace.namespace == "redhat"),
+                            trusted_versions: vec![],
+                            snyk: None,
+                            vulnerabilities: vulns,
+                        };
+                        trusted_versions.push(p);
+                    }
+                }
+            }
         }
         Ok(trusted_versions)
     }
@@ -324,7 +352,7 @@ pub async fn get_package(
 )]
 #[get("/api/trusted")]
 pub async fn get_trusted(data: web::Data<TrustedContent>) -> Result<HttpResponse, ApiError> {
-    Ok(HttpResponse::Ok().json(data.get_all_trusted()?))
+    Ok(HttpResponse::Ok().json(data.get_all_trusted().await?))
 }
 
 #[derive(ToSchema, Serialize, Deserialize, Debug)]

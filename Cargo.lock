@@ -999,7 +999,7 @@ dependencies = [
 [[package]]
 name = "guac-rs"
 version = "0.1.0"
-source = "git+https://github.com/dejanb/guac-rs.git?branch=main#d898b554955f2d2e4238c4e5506985705d5e90bc"
+source = "git+https://github.com/dejanb/guac-rs.git?branch=main#e9e42a8fe2735cbccde1a8a23cd62d6e30530c71"
 dependencies = [
  "anyhow",
  "chrono",
