@@ -2,10 +2,12 @@ use actix_web::web::Data;
 use actix_web::{middleware::Logger, App, HttpServer};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+use std::sync::Arc;
 
 use crate::index;
 use crate::package;
 use crate::vulnerability;
+use crate::guac;
 
 pub struct Server {
     bind: String,
@@ -45,10 +47,13 @@ impl Server {
     pub async fn run(self) -> anyhow::Result<()> {
         let openapi = ApiDoc::openapi();
 
+        let guac = Arc::new(guac::Guac::new(&self.guac_url));
+
         HttpServer::new(move || {
             App::new()
                 .wrap(Logger::default())
-                .app_data(Data::new(package::TrustedContent::new(&self.guac_url)))
+                .app_data(Data::new(package::TrustedContent::new(guac.clone())))
+                .app_data(Data::new(guac.clone()))
                 .configure(package::configure())
                 .configure(vulnerability::configure())
                 .configure(index::configure())

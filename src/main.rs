@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::process::{ExitCode, Termination};
 
+mod guac;
 mod index;
 mod package;
 mod server;

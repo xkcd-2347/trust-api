@@ -1,11 +1,12 @@
+use crate::guac::Guac;
 use actix_web::{
     error, get, http::StatusCode, post, web, web::Json, web::ServiceConfig, HttpResponse,
 };
 use core::str::FromStr;
-use guac::client::GuacClient;
 use packageurl::PackageUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use thiserror::Error;
 use utoipa::ToSchema;
 
@@ -29,11 +30,11 @@ static TRUSTED_GAV: &str = include_str!("../data/trusted-gav.json");
 
 pub struct TrustedContent {
     data: HashMap<String, String>,
-    client: GuacClient,
+    client: Arc<Guac>,
 }
 
 impl TrustedContent {
-    pub fn new(url: &str) -> Self {
+    pub fn new(client: Arc<Guac>) -> Self {
         let mut data = HashMap::new();
         let input: serde_json::Value = serde_json::from_str(TRUSTED_GAV).unwrap();
         if let Some(input) = input.as_array() {
@@ -43,17 +44,42 @@ impl TrustedContent {
                 data.insert(upstream, tc);
             }
         }
-        let client = GuacClient::new(url.to_string());
-
         Self { data, client }
+    }
+
+    pub async fn get_versions(&self, purl_str: &str) -> Result<Vec<PackageRef>, ApiError> {
+        if let Ok(purl) = PackageUrl::from_str(purl_str) {
+            //get related packages from guac
+            let mut trusted_versions: Vec<PackageRef> =
+                self.client.get_packages(purl.clone()).await.map_err(|_| ApiError::InternalError)?;
+
+            for (key, value) in self.data.iter() {
+                if let Ok(p) = PackageUrl::from_str(key) {
+                    if p.name() == purl.name() {
+                        trusted_versions.push(PackageRef {
+                            purl: value.clone(),
+                            href: format!("/api/package?purl={}", &urlencoding::encode(value)),
+                            trusted: Some(true),
+                        });
+                    }
+                }
+            }
+
+            Ok(trusted_versions)
+        } else {
+            Err(ApiError::InvalidPackageUrl {
+                purl: purl_str.to_string(),
+            })
+        }
     }
 
     async fn get_trusted(&self, purl_str: &str) -> Result<Package, ApiError> {
         if let Ok(purl) = PackageUrl::from_str(purl_str) {
-            let vulns = self.get_vulnerabilities(purl_str).await?;
+            let vulns = self.client.get_vulnerabilities(purl_str).await.map_err(|_| ApiError::InternalError)?;
 
             //get related packages from guac
-            let mut trusted_versions: Vec<PackageRef> = self.get_packages(purl.clone()).await?;
+            let mut trusted_versions: Vec<PackageRef> =
+                self.client.get_packages(purl.clone()).await.map_err(|_| ApiError::InternalError)?;
 
             //get trusted gav versions
             if purl.version().is_some() && purl.namespace().is_some() {
@@ -92,67 +118,6 @@ impl TrustedContent {
         }
     }
 
-    async fn get_versions(&self, purl_str: &str) -> Result<Vec<PackageRef>, ApiError> {
-        if let Ok(purl) = PackageUrl::from_str(purl_str) {
-            //get related packages from guac
-            let mut trusted_versions: Vec<PackageRef> = self.get_packages(purl.clone()).await?;
-
-            for (key, value) in self.data.iter() {
-                if let Ok(p) = PackageUrl::from_str(key) {
-                    if p.name() == purl.name() {
-                        trusted_versions.push(PackageRef {
-                            purl: value.clone(),
-                            href: format!("/api/package?purl={}", &urlencoding::encode(value)),
-                            trusted: Some(true),
-                        });
-                    }
-                }
-            }
-
-            Ok(trusted_versions)
-        } else {
-            Err(ApiError::InvalidPackageUrl {
-                purl: purl_str.to_string(),
-            })
-        }
-    }
-
-    async fn get_packages(&self, purl: PackageUrl<'_>) -> Result<Vec<PackageRef>, ApiError> {
-        //strip version to search for all related packages
-        let query_purl = format!(
-            "pkg:{}/{}/{}",
-            purl.ty(),
-            purl.namespace().unwrap(),
-            purl.name(),
-        );
-
-        let pkgs = self.client.get_packages(&query_purl).await.map_err(|e| {
-            log::warn!("Error getting packages from GUAC: {:?}", e);
-            ApiError::InternalError
-        })?;
-        let mut ret = Vec::new();
-        for pkg in pkgs.iter() {
-            let t = &pkg.type_;
-            for namespace in pkg.namespaces.iter() {
-                for name in namespace.names.iter() {
-                    for version in name.versions.iter() {
-                        let purl = format!(
-                            "pkg:{}/{}/{}@{}",
-                            t, namespace.namespace, name.name, version.version
-                        );
-                        let p = PackageRef {
-                            purl: purl.clone(),
-                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: Some(namespace.namespace == "redhat"),
-                        };
-                        ret.push(p);
-                    }
-                }
-            }
-        }
-        Ok(ret)
-    }
-
     // temp fn to decide if the package is trusted based on its version or namespace
     fn is_trusted(&self, purl: PackageUrl<'_>) -> bool {
         purl.version().map_or(false, |v| v.contains("redhat"))
@@ -176,141 +141,13 @@ impl TrustedContent {
             });
         }
 
-        let all_packages = self
-            .client
-            .get_all_packages()
-            .await
-            .map_err(|_| ApiError::InternalError)?;
-        for pkg in all_packages.iter() {
-            let t = &pkg.type_;
-            for namespace in pkg.namespaces.iter() {
-                for name in namespace.names.iter() {
-                    for version in name.versions.iter() {
-                        let purl = format!(
-                            "pkg:{}/{}/{}@{}",
-                            t, namespace.namespace, name.name, version.version
-                        );
-                        let vulns = self.get_vulnerabilities(&purl).await?;
-                        let p = Package {
-                            purl: Some(purl.to_string()),
-                            href: Some(format!(
-                                "/api/package?purl={}",
-                                &urlencoding::encode(&purl.to_string())
-                            )),
-                            trusted: Some(namespace.namespace == "redhat"),
-                            trusted_versions: vec![],
-                            snyk: None,
-                            vulnerabilities: vulns,
-                        };
-                        trusted_versions.push(p);
-                    }
-                }
-            }
-        }
+        trusted_versions.extend(
+            self.client
+                .get_all_packages()
+                .await
+                .map_err(|_| ApiError::InternalError)?,
+        );
         Ok(trusted_versions)
-    }
-
-    async fn get_dependencies(&self, purl: &str) -> Result<PackageDependencies, ApiError> {
-        let deps = self.client.get_dependencies(purl).await.map_err(|e| {
-            log::warn!("Error getting dependencies from GUAC: {:?}", e);
-            ApiError::InternalError
-        })?;
-
-        let mut ret = Vec::new();
-        for dep in deps.iter() {
-            let pkg = &dep.dependent_package;
-            let t = &pkg.type_;
-            for namespace in pkg.namespaces.iter() {
-                for name in namespace.names.iter() {
-                    for version in name.versions.iter() {
-                        let purl = format!(
-                            "pkg:{}/{}/{}@{}",
-                            t, namespace.namespace, name.name, version.version
-                        );
-                        let p = PackageRef {
-                            purl: purl.clone(),
-                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: None,
-                        };
-                        ret.push(p);
-                    }
-                }
-            }
-        }
-        Ok(PackageDependencies(ret))
-    }
-
-    async fn get_dependants(&self, purl: &str) -> Result<PackageDependencies, ApiError> {
-        let deps = self.client.is_dependent(purl).await.map_err(|e| {
-            log::warn!("Error getting dependencies from GUAC: {:?}", e);
-            ApiError::InternalError
-        })?;
-
-        let mut ret = Vec::new();
-        for dep in deps.iter() {
-            let pkg = &dep.package;
-            let t = &pkg.type_;
-            for namespace in pkg.namespaces.iter() {
-                for name in namespace.names.iter() {
-                    for version in name.versions.iter() {
-                        let purl = format!(
-                            "pkg:{}/{}/{}@{}",
-                            t, namespace.namespace, name.name, version.version
-                        );
-                        let p = PackageRef {
-                            purl: purl.clone(),
-                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: None,
-                        };
-                        ret.push(p);
-                    }
-                }
-            }
-        }
-        Ok(PackageDependencies(ret))
-    }
-
-    async fn get_vulnerabilities(&self, purl: &str) -> Result<Vec<VulnerabilityRef>, ApiError> {
-        let vulns = self.client.certify_vuln(purl).await.map_err(|e| {
-            log::warn!("Error getting vulnerabilities from GUAC: {:?}", e);
-            ApiError::InternalError
-        })?;
-
-        let mut ret = Vec::new();
-        for vuln in vulns.iter() {
-            match &vuln.vulnerability {
-                guac::vuln::certify_vuln::AllCertifyVulnTreeVulnerability::OSV(osv) => {
-                    let id = osv.osv_id.clone();
-                    let vuln_ref = VulnerabilityRef {
-                        cve: id.clone(),
-                        href: format!(
-                            "{}/{}",
-                            "https://osv.dev/vulnerability",
-                            id.replace("ghsa", "GHSA")
-                        ), //TODO fix guac id format
-                    };
-                    //TODO fix guac repeated entries
-                    if !ret.contains(&vuln_ref) {
-                        ret.push(vuln_ref);
-                    }
-                }
-                guac::vuln::certify_vuln::AllCertifyVulnTreeVulnerability::CVE(id) => {
-                    let vuln_ref = VulnerabilityRef {
-                        cve: id.cve_id.clone(),
-                        href: format!(
-                            "https://access.redhat.com/security/cve/{}",
-                            id.cve_id.to_lowercase()
-                        ), //TODO fix guac id format
-                    };
-                    //TODO fix guac repeated entries
-                    if !ret.contains(&vuln_ref) {
-                        ret.push(vuln_ref);
-                    }
-                }
-                _ => {}
-            };
-        }
-        Ok(ret)
     }
 }
 
@@ -413,13 +250,13 @@ pub async fn query_package(
 )]
 #[post("/api/package/dependencies")]
 pub async fn query_package_dependencies(
-    data: web::Data<TrustedContent>,
+    data: web::Data<Guac>,
     body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
     let mut dependencies: Vec<PackageDependencies> = Vec::new();
     for purl in body.list().iter() {
         if PackageUrl::from_str(purl).is_ok() {
-            let lst = data.get_dependencies(purl).await?;
+            let lst = data.get_dependencies(purl).await.map_err(|_| ApiError::InternalError)?;
             dependencies.push(lst);
         } else {
             return Err(ApiError::InvalidPackageUrl {
@@ -439,13 +276,13 @@ pub async fn query_package_dependencies(
 )]
 #[post("/api/package/dependants")]
 pub async fn query_package_dependants(
-    data: web::Data<TrustedContent>,
+    data: web::Data<Guac>,
     body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
     let mut dependencies: Vec<PackageDependencies> = Vec::new();
     for purl in body.list().iter() {
         if PackageUrl::from_str(purl).is_ok() {
-            let lst = data.get_dependants(purl).await?;
+            let lst = data.get_dependants(purl).await.map_err(|_| ApiError::InternalError)?;
             dependencies.push(lst);
         } else {
             return Err(ApiError::InvalidPackageUrl {
@@ -519,8 +356,8 @@ pub struct Package {
     href: "/api/vulnerability/CVE-1234".into()
 }))]
 pub struct VulnerabilityRef {
-    cve: String,
-    href: String,
+    pub cve: String,
+    pub href: String,
 }
 
 #[derive(ToSchema, Serialize, Deserialize, Debug)]
