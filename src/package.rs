@@ -143,7 +143,7 @@ impl TrustedContent {
                         let p = PackageRef {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: Some(namespace.namespace == "redhat")
+                            trusted: Some(namespace.namespace == "redhat"),
                         };
                         ret.push(p);
                     }
@@ -155,7 +155,8 @@ impl TrustedContent {
 
     // temp fn to decide if the package is trusted based on its version or namespace
     fn is_trusted(&self, purl: PackageUrl<'_>) -> bool {
-        purl.version().map_or(false, |v| v.contains("redhat")) || purl.namespace().map_or(false, |v| v == "redhat")
+        purl.version().map_or(false, |v| v.contains("redhat"))
+            || purl.namespace().map_or(false, |v| v == "redhat")
     }
 
     async fn get_all_trusted(&self) -> Result<Vec<Package>, ApiError> {
@@ -175,7 +176,11 @@ impl TrustedContent {
             });
         }
 
-        let all_packages = self.client.get_all_packages().await.map_err(|_| ApiError::InternalError)?;
+        let all_packages = self
+            .client
+            .get_all_packages()
+            .await
+            .map_err(|_| ApiError::InternalError)?;
         for pkg in all_packages.iter() {
             let t = &pkg.type_;
             for namespace in pkg.namespaces.iter() {
@@ -302,8 +307,7 @@ impl TrustedContent {
                         ret.push(vuln_ref);
                     }
                 }
-                _ => {
-                }
+                _ => {}
             };
         }
         Ok(ret)
