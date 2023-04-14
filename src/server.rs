@@ -3,6 +3,7 @@ use actix_web::{middleware::Logger, App, HttpServer};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+use crate::index;
 use crate::package;
 use crate::vulnerability;
 
@@ -50,6 +51,7 @@ impl Server {
                 .app_data(Data::new(package::TrustedContent::new(&self.guac_url)))
                 .configure(package::configure())
                 .configure(vulnerability::configure())
+                .configure(index::configure())
                 .service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/openapi.json", openapi.clone()))
         })
         .bind((self.bind, self.port))?

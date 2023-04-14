@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::process::{ExitCode, Termination};
 
+mod index;
 mod package;
 mod server;
 mod vulnerability;
