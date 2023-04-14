@@ -50,8 +50,11 @@ impl TrustedContent {
     pub async fn get_versions(&self, purl_str: &str) -> Result<Vec<PackageRef>, ApiError> {
         if let Ok(purl) = PackageUrl::from_str(purl_str) {
             //get related packages from guac
-            let mut trusted_versions: Vec<PackageRef> =
-                self.client.get_packages(purl.clone()).await.map_err(|_| ApiError::InternalError)?;
+            let mut trusted_versions: Vec<PackageRef> = self
+                .client
+                .get_packages(purl.clone())
+                .await
+                .map_err(|_| ApiError::InternalError)?;
 
             for (key, value) in self.data.iter() {
                 if let Ok(p) = PackageUrl::from_str(key) {
@@ -75,11 +78,18 @@ impl TrustedContent {
 
     async fn get_trusted(&self, purl_str: &str) -> Result<Package, ApiError> {
         if let Ok(purl) = PackageUrl::from_str(purl_str) {
-            let vulns = self.client.get_vulnerabilities(purl_str).await.map_err(|_| ApiError::InternalError)?;
+            let vulns = self
+                .client
+                .get_vulnerabilities(purl_str)
+                .await
+                .map_err(|_| ApiError::InternalError)?;
 
             //get related packages from guac
-            let mut trusted_versions: Vec<PackageRef> =
-                self.client.get_packages(purl.clone()).await.map_err(|_| ApiError::InternalError)?;
+            let mut trusted_versions: Vec<PackageRef> = self
+                .client
+                .get_packages(purl.clone())
+                .await
+                .map_err(|_| ApiError::InternalError)?;
 
             //get trusted gav versions
             if purl.version().is_some() && purl.namespace().is_some() {
@@ -250,13 +260,16 @@ pub async fn query_package(
 )]
 #[post("/api/package/dependencies")]
 pub async fn query_package_dependencies(
-    data: web::Data<Guac>,
+    data: web::Data<Arc<Guac>>,
     body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
     let mut dependencies: Vec<PackageDependencies> = Vec::new();
     for purl in body.list().iter() {
         if PackageUrl::from_str(purl).is_ok() {
-            let lst = data.get_dependencies(purl).await.map_err(|_| ApiError::InternalError)?;
+            let lst = data
+                .get_dependencies(purl)
+                .await
+                .map_err(|_| ApiError::InternalError)?;
             dependencies.push(lst);
         } else {
             return Err(ApiError::InvalidPackageUrl {
@@ -276,13 +289,16 @@ pub async fn query_package_dependencies(
 )]
 #[post("/api/package/dependants")]
 pub async fn query_package_dependants(
-    data: web::Data<Guac>,
+    data: web::Data<Arc<Guac>>,
     body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
     let mut dependencies: Vec<PackageDependencies> = Vec::new();
     for purl in body.list().iter() {
         if PackageUrl::from_str(purl).is_ok() {
-            let lst = data.get_dependants(purl).await.map_err(|_| ApiError::InternalError)?;
+            let lst = data
+                .get_dependants(purl)
+                .await
+                .map_err(|_| ApiError::InternalError)?;
             dependencies.push(lst);
         } else {
             return Err(ApiError::InvalidPackageUrl {

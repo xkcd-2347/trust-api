@@ -2,6 +2,7 @@ use crate::package::Package;
 use crate::package::PackageDependencies;
 use crate::package::PackageRef;
 use crate::package::VulnerabilityRef;
+use crate::vulnerability::Vulnerability;
 use anyhow::anyhow;
 use guac_rs::client::GuacClient;
 use packageurl::PackageUrl;
@@ -55,6 +56,49 @@ impl Guac {
             }
         }
         Ok(ret)
+    }
+
+    pub async fn get_vulnerability(&self, cve_id: &str) -> Result<Vulnerability, anyhow::Error> {
+        log::info!("Lookup cve {}", cve_id);
+        let vulns = self.client.get_vulnerabilities(cve_id).await.map_err(|e| {
+            let e = format!("Error getting vulnerabilities from GUAC: {:?}", e);
+            log::warn!("{}", e);
+            anyhow!(e)
+        })?;
+
+        let mut packages = Vec::new();
+        for vuln in vulns.iter() {
+            let pkg = &vuln.package;
+            let t = &pkg.type_;
+            for namespace in pkg.namespaces.iter() {
+                for name in namespace.names.iter() {
+                    for version in name.versions.iter() {
+                        let purl = format!(
+                            "pkg:{}/{}/{}@{}",
+                            t, namespace.namespace, name.name, version.version
+                        );
+                        let p = PackageRef {
+                            purl: purl.clone(),
+                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                            trusted: Some(namespace.namespace == "redhat"),
+                        };
+                        packages.push(p);
+                    }
+                }
+            }
+        }
+
+        Ok(Vulnerability {
+            cve: cve_id.to_string(),
+            // TODO: Get summary from guac
+            summary: String::new(),
+            // TODO: Avoid hardcoding url, get from guac
+            advisory: format!(
+                "https://access.redhat.com/security/cve/{}",
+                cve_id.to_lowercase()
+            ),
+            packages,
+        })
     }
 
     pub async fn get_vulnerabilities(

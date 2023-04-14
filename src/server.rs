@@ -1,13 +1,13 @@
 use actix_web::web::Data;
 use actix_web::{middleware::Logger, App, HttpServer};
+use std::sync::Arc;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use std::sync::Arc;
 
+use crate::guac;
 use crate::index;
 use crate::package;
 use crate::vulnerability;
-use crate::guac;
 
 pub struct Server {
     bind: String,
