@@ -1,12 +1,13 @@
 name: Containers
 
 on:
-  push:
+  workflow_call:
     inputs:
       imageTag:
         description: The image tag
         required: true
         type: string
+        default: "latest"
       platforms:
         description: The target platforms to build
         type: string
@@ -18,7 +19,7 @@ on:
         description: The image tag
         required: true
         type: string
-        default: latest
+        default: "latest"
       platforms:
         description: The target platforms to build (like `linux/amd64, linux/arm64`)
         required: true
