@@ -90,9 +90,11 @@ impl Guac {
         }
 
         // Fetch CVE details to get summary for this vulnerability.
-        let hydra = format!("https://access.redhat.com/hydra/rest/securitydata/cve/{}.json", cve_id.to_ascii_uppercase());
-        let response = reqwest::get(hydra)
-            .await;
+        let hydra = format!(
+            "https://access.redhat.com/hydra/rest/securitydata/cve/{}.json",
+            cve_id.to_ascii_uppercase()
+        );
+        let response = reqwest::get(hydra).await;
         let mut summary = "Unavailable".to_string();
         if let Ok(response) = response {
             if response.status() == StatusCode::OK {
