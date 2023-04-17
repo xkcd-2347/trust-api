@@ -2213,6 +2213,7 @@ dependencies = [
  "mime",
  "okapi",
  "packageurl",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror",

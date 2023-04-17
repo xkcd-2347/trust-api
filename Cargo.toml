@@ -29,4 +29,5 @@ utoipa-swagger-ui = { version = "3", features = ["actix-web"] }
 urlencoding = "2.1.2"
 guac-rs = { git = "https://github.com/dejanb/guac-rs.git", branch = "main" }
 http = "*"
+reqwest = "0.11.16"
 # guac = { package = "guac-rs", path = "../guac-rs/lib" }

@@ -5,6 +5,7 @@ use crate::package::VulnerabilityRef;
 use crate::vulnerability::Vulnerability;
 use anyhow::anyhow;
 use guac_rs::client::GuacClient;
+use http::StatusCode;
 use packageurl::PackageUrl;
 
 #[derive(Clone)]
@@ -88,10 +89,26 @@ impl Guac {
             }
         }
 
+        // Fetch CVE details to get summary for this vulnerability.
+        let hydra = format!("https://access.redhat.com/hydra/rest/securitydata/cve/{}.json", cve_id.to_ascii_uppercase());
+        let response = reqwest::get(hydra)
+            .await;
+        let mut summary = "Unavailable".to_string();
+        if let Ok(response) = response {
+            if response.status() == StatusCode::OK {
+                if let Ok(data) = response.json::<serde_json::Value>().await {
+                    if let Some(Some(details)) = data.get("details").map(|s| s.as_array()) {
+                        if let Some(Some(details)) = details.get(0).map(|s| s.as_str()) {
+                            summary = details.to_string();
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(Vulnerability {
             cve: cve_id.to_string(),
-            // TODO: Get summary from guac
-            summary: String::new(),
+            summary,
             // TODO: Avoid hardcoding url, get from guac
             advisory: format!(
                 "https://access.redhat.com/security/cve/{}",
