@@ -15,7 +15,7 @@ pub(crate) fn configure() -> impl FnOnce(&mut ServiceConfig) {
         config.service(get_package);
         config.service(query_package);
         config.service(query_package_dependencies);
-        config.service(query_package_dependants);
+        config.service(query_package_dependents);
         config.service(get_trusted);
         config.service(query_package_versions);
     }
@@ -283,12 +283,12 @@ pub async fn query_package_dependencies(
 #[utoipa::path(
     request_body = PackageList,
     responses(
-        (status = 200, description = "Package found", body = Vec<PackageDependants>),
+        (status = 200, description = "Package found", body = Vec<PackageDependents>),
         (status = BAD_REQUEST, description = "Invalid package URL"),
     ),
 )]
-#[post("/api/package/dependants")]
-pub async fn query_package_dependants(
+#[post("/api/package/dependents")]
+pub async fn query_package_dependents(
     data: web::Data<Arc<Guac>>,
     body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
@@ -296,7 +296,7 @@ pub async fn query_package_dependants(
     for purl in body.list().iter() {
         if PackageUrl::from_str(purl).is_ok() {
             let lst = data
-                .get_dependants(purl)
+                .get_dependents(purl)
                 .await
                 .map_err(|_| ApiError::InternalError)?;
             dependencies.push(lst);
@@ -396,7 +396,7 @@ pub struct SnykData;
 pub struct PackageDependencies(pub Vec<PackageRef>);
 
 #[derive(ToSchema, Serialize, Deserialize)]
-pub struct PackageDependants(pub Vec<PackageRef>);
+pub struct PackageDependents(pub Vec<PackageRef>);
 
 #[derive(Debug, Error, Serialize, Deserialize)]
 pub enum ApiError {

@@ -21,12 +21,12 @@ pub struct Server {
             package::get_package,
             package::query_package,
             package::query_package_dependencies,
-            package::query_package_dependants,
+            package::query_package_dependents,
             package::query_package_versions,
             vulnerability::query_vulnerability,
         ),
         components(
-            schemas(package::Package, package::PackageList, package::PackageDependencies, package::PackageDependants, package::PackageRef, package::SnykData, package::VulnerabilityRef, vulnerability::Vulnerability)
+            schemas(package::Package, package::PackageList, package::PackageDependencies, package::PackageDependents, package::PackageRef, package::SnykData, package::VulnerabilityRef, vulnerability::Vulnerability)
         ),
         tags(
             (name = "package", description = "Package query endpoints."),

@@ -229,9 +229,9 @@ impl Guac {
         Ok(all)
     }
 
-    pub async fn get_dependants(&self, purl: &str) -> Result<PackageDependencies, anyhow::Error> {
+    pub async fn get_dependents(&self, purl: &str) -> Result<PackageDependencies, anyhow::Error> {
         let deps = self.client.is_dependent(purl).await.map_err(|e| {
-            let e = format!("Error getting dependants from GUAC: {:?}", e);
+            let e = format!("Error getting dependents from GUAC: {:?}", e);
             log::warn!("{}", e);
             anyhow!(e)
         })?;

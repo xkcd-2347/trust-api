@@ -72,7 +72,7 @@ curl --json '["pkg:maven/io.quarkus/quarkus-vertx@2.13.7.Final"]' http://localho
 ```
 
 ```
-curl --json '["pkg:maven/io.vertx/vertx-web@4.3.7"]' http://localhost:8081/api/package/dependants | jq
+curl --json '["pkg:maven/io.vertx/vertx-web@4.3.7"]' http://localhost:8081/api/package/dependents | jq
 ```
 
 ```
