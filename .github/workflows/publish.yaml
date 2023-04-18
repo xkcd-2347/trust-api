@@ -58,7 +58,7 @@ jobs:
       contents: read
       packages: write
 
-    needs: [ ci, container ]
+    needs: [ init, ci, container ]
     runs-on: ubuntu-22.04
     steps:
         - uses: actions/download-artifact@v3
