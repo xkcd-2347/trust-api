@@ -55,7 +55,10 @@ impl Server {
         HttpServer::new(move || {
             App::new()
                 .wrap(Logger::default())
-                .app_data(Data::new(package::TrustedContent::new(guac.clone(), self.snyk.clone())))
+                .app_data(Data::new(package::TrustedContent::new(
+                    guac.clone(),
+                    self.snyk.clone(),
+                )))
                 .app_data(Data::new(guac.clone()))
                 .configure(package::configure())
                 .configure(vulnerability::configure())

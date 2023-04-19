@@ -72,19 +72,14 @@ pub struct Run {
 }
 
 #[derive(clap::Args, Debug, Clone)]
-#[group(required=false)]
+#[group(required = false)]
 pub struct Snyk {
-    #[arg(
-        long = "snyk-org",
-    )]
+    #[arg(long = "snyk-org")]
     pub(crate) org: Option<String>,
 
-    #[arg(
-        long = "snyk-token"
-    )]
+    #[arg(long = "snyk-token")]
     pub(crate) token: Option<String>,
 }
-
 
 #[tokio::main]
 async fn main() -> impl Termination {
