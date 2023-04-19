@@ -1,10 +1,12 @@
 use crate::guac::Guac;
+use crate::Snyk;
 use actix_web::{
     error, get, http::StatusCode, post, web, web::Json, web::ServiceConfig, HttpResponse,
 };
 use core::str::FromStr;
 use packageurl::PackageUrl;
 use serde::{Deserialize, Serialize};
+use snyk::apis::configuration::{self, ApiKey};
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
@@ -31,10 +33,11 @@ static TRUSTED_GAV: &str = include_str!("../data/trusted-gav.json");
 pub struct TrustedContent {
     data: HashMap<String, String>,
     client: Arc<Guac>,
+    snyk: Snyk,
 }
 
 impl TrustedContent {
-    pub fn new(client: Arc<Guac>) -> Self {
+    pub fn new(client: Arc<Guac>, snyk: Snyk) -> Self {
         let mut data = HashMap::new();
         let input: serde_json::Value = serde_json::from_str(TRUSTED_GAV).unwrap();
         if let Some(input) = input.as_array() {
@@ -44,7 +47,7 @@ impl TrustedContent {
                 data.insert(upstream, tc);
             }
         }
-        Self { data, client }
+        Self { data, client, snyk }
     }
 
     pub async fn get_versions(&self, purl_str: &str) -> Result<Vec<PackageRef>, ApiError> {
@@ -78,11 +81,48 @@ impl TrustedContent {
 
     async fn get_trusted(&self, purl_str: &str) -> Result<Package, ApiError> {
         if let Ok(purl) = PackageUrl::from_str(purl_str) {
-            let vulns = self
+            let mut vulns = self
                 .client
                 .get_vulnerabilities(purl_str)
                 .await
                 .map_err(|_| ApiError::InternalError)?;
+
+            if self.snyk.org.is_some() && self.snyk.token.is_some() {
+                let key = ApiKey {
+                    prefix: Some("token".to_string()),
+                    key: self.snyk.token.as_ref().unwrap().to_string(),
+                };
+
+                let config = configuration::Configuration {
+                    api_key: Some(key),
+                    ..Default::default()
+                };
+                let issues = snyk::apis::issues_api::fetch_issues_per_purl(
+                    &config,
+                    "2023-02-15",
+                    purl_str,
+                    self.snyk.org.as_ref().unwrap(),
+                    None,
+                    None,
+                )
+                .await;
+
+                if let Ok(issue) = issues {
+                    if let Some(data) = issue.data {
+                        for d in data {
+                            if let Some(id) = d.id {
+                                let vuln_ref = VulnerabilityRef {
+                                    cve: id.clone(),
+                                    href: format!("{}/{}", "https://security.snyk.io/vuln", id),
+                                };
+                                if !vulns.contains(&vuln_ref) {
+                                    vulns.push(vuln_ref);
+                                }
+                            }
+                        }
+                    };
+                }
+            }
 
             //get related packages from guac
             let mut trusted_versions: Vec<PackageRef> = self

@@ -8,11 +8,13 @@ use crate::guac;
 use crate::index;
 use crate::package;
 use crate::vulnerability;
+use crate::Snyk;
 
 pub struct Server {
     bind: String,
     port: u16,
     guac_url: String,
+    snyk: Snyk,
 }
 
 #[derive(OpenApi)]
@@ -36,11 +38,12 @@ pub struct Server {
 pub struct ApiDoc;
 
 impl Server {
-    pub fn new(bind: String, port: u16, guac_url: String) -> Self {
+    pub fn new(bind: String, port: u16, guac_url: String, snyk: Snyk) -> Self {
         Self {
             bind,
             port,
             guac_url,
+            snyk,
         }
     }
 
@@ -52,7 +55,7 @@ impl Server {
         HttpServer::new(move || {
             App::new()
                 .wrap(Logger::default())
-                .app_data(Data::new(package::TrustedContent::new(guac.clone())))
+                .app_data(Data::new(package::TrustedContent::new(guac.clone(), self.snyk.clone())))
                 .app_data(Data::new(guac.clone()))
                 .configure(package::configure())
                 .configure(vulnerability::configure())

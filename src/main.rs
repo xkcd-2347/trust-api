@@ -41,8 +41,9 @@ impl Cli {
                 bind,
                 port,
                 guac_url,
+                snyk,
             }) => {
-                let s = server::Server::new(bind, port, guac_url);
+                let s = server::Server::new(bind, port, guac_url, snyk);
                 s.run().await?;
             }
         }
@@ -53,6 +54,9 @@ impl Cli {
 #[derive(clap::Args, Debug)]
 #[command(about = "Run the api server", args_conflicts_with_subcommands = true)]
 pub struct Run {
+    #[command(flatten)]
+    pub(crate) snyk: Snyk,
+
     #[arg(short, long, default_value = "0.0.0.0")]
     pub(crate) bind: String,
 
@@ -66,6 +70,21 @@ pub struct Run {
     )]
     pub(crate) guac_url: String,
 }
+
+#[derive(clap::Args, Debug, Clone)]
+#[group(required=false)]
+pub struct Snyk {
+    #[arg(
+        long = "snyk-org",
+    )]
+    pub(crate) org: Option<String>,
+
+    #[arg(
+        long = "snyk-token"
+    )]
+    pub(crate) token: Option<String>,
+}
+
 
 #[tokio::main]
 async fn main() -> impl Termination {
