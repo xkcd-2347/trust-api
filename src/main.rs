@@ -5,6 +5,7 @@ mod guac;
 mod index;
 mod package;
 mod server;
+mod snyk;
 mod vulnerability;
 
 #[derive(clap::Subcommand, Debug)]

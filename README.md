@@ -65,6 +65,14 @@ You can also run the API server using a container:
 podman run -p 8080:8080 -ti ghcr.io/xkcd-2347/trust-api:latest run -p 8081 
 ```
 
+### Using Snyk
+
+If `snyk-org` and `snyk-token` parameters are provided, the `api/package` call will check purl vulnerabilities in Snyk (on top of Guac).
+
+``` 4d
+cargo run -- run -p 8080 --snyk-org=63884128-5f57-4752-b9c0-9d0882873bf4 --snyk-token=<TOKEN>
+```
+
 ### Example usages
 
 ```

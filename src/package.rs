@@ -6,7 +6,6 @@ use actix_web::{
 use core::str::FromStr;
 use packageurl::PackageUrl;
 use serde::{Deserialize, Serialize};
-use snyk::apis::configuration::{self, ApiKey};
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
@@ -82,50 +81,20 @@ impl TrustedContent {
 
     async fn get_trusted(&self, purl_str: &str) -> Result<Package, ApiError> {
         if let Ok(purl) = PackageUrl::from_str(purl_str) {
+            // get vulnerabilities from Guac
             let mut vulns = self
                 .client
                 .get_vulnerabilities(purl_str)
                 .await
                 .map_err(|_| ApiError::InternalError)?;
 
-            if self.snyk.org.is_some() && self.snyk.token.is_some() {
-                let key = ApiKey {
-                    prefix: Some("token".to_string()),
-                    key: self.snyk.token.as_ref().unwrap().to_string(),
-                };
+            // get vulnerabilities from Snyk
+            let mut snyk_vulns = crate::snyk::get_vulnerabilities(self.snyk.clone(), purl_str)
+                .await
+                .map_err(|_| ApiError::InternalError)?;
+            vulns.append(&mut snyk_vulns);
 
-                let config = configuration::Configuration {
-                    api_key: Some(key),
-                    ..Default::default()
-                };
-                let issues = snyk::apis::issues_api::fetch_issues_per_purl(
-                    &config,
-                    "2023-02-15",
-                    purl_str,
-                    self.snyk.org.as_ref().unwrap(),
-                    None,
-                    None,
-                )
-                .await;
-
-                if let Ok(issue) = issues {
-                    if let Some(data) = issue.data {
-                        for d in data {
-                            if let Some(id) = d.id {
-                                let vuln_ref = VulnerabilityRef {
-                                    cve: id.clone(),
-                                    href: format!("{}/{}", "https://security.snyk.io/vuln", id),
-                                };
-                                if !vulns.contains(&vuln_ref) {
-                                    vulns.push(vuln_ref);
-                                }
-                            }
-                        }
-                    };
-                }
-            }
-
-            //get related packages from guac
+            //get related packages from Guac
             let mut trusted_versions: Vec<PackageRef> = self
                 .client
                 .get_packages(purl.clone())
