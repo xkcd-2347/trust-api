@@ -5,6 +5,8 @@ use crate::package::VulnerabilityRef;
 use crate::vulnerability::Cvss3;
 use crate::vulnerability::Vulnerability;
 use anyhow::anyhow;
+use chrono::DateTime;
+use chrono::Utc;
 use guac_rs::client::GuacClient;
 use http::StatusCode;
 use packageurl::PackageUrl;
@@ -99,6 +101,7 @@ impl Guac {
         let mut summary = "Unavailable".to_string();
         let mut severity = None;
         let mut cvss3 = None;
+        let mut date = None;
         if let Ok(response) = response {
             if response.status() == StatusCode::OK {
                 if let Ok(data) = response.json::<serde_json::Value>().await {
@@ -121,8 +124,14 @@ impl Guac {
                             _ => {}
                         }
                     }
-                    if let Some(Some(data)) = data.get("thread_severity").map(|s| s.as_str()) {
+                    if let Some(Some(data)) = data.get("threat_severity").map(|s| s.as_str()) {
                         severity.replace(data.to_string());
+                    }
+
+                    if let Some(Some(data)) = data.get("public_date").map(|s| s.as_str()) {
+                        if let Ok(d) = data.parse::<DateTime<Utc>>() {
+                            date.replace(d);
+                        }
                     }
                 }
             }
@@ -133,6 +142,7 @@ impl Guac {
             summary,
             severity,
             cvss3,
+            date,
             // TODO: Avoid hardcoding url, get from guac
             advisory: format!(
                 "https://access.redhat.com/security/cve/{}",
