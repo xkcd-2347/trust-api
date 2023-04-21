@@ -57,6 +57,7 @@ impl Server {
             let cors = Cors::default()
                 .send_wildcard()
                 .allow_any_origin()
+                .allow_any_method()
                 .max_age(3600);
 
             App::new()
