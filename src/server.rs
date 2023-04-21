@@ -1,3 +1,4 @@
+use actix_cors::Cors;
 use actix_web::web::Data;
 use actix_web::{middleware::Logger, App, HttpServer};
 use std::sync::Arc;
@@ -53,8 +54,14 @@ impl Server {
         let guac = Arc::new(guac::Guac::new(&self.guac_url));
 
         HttpServer::new(move || {
+            let cors = Cors::default()
+                .send_wildcard()
+                .allow_any_origin()
+                .max_age(3600);
+
             App::new()
                 .wrap(Logger::default())
+                .wrap(cors)
                 .app_data(Data::new(package::TrustedContent::new(
                     guac.clone(),
                     self.snyk.clone(),
