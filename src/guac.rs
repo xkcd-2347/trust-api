@@ -26,11 +26,15 @@ impl Guac {
         &self,
         purl: PackageUrl<'_>,
     ) -> Result<Vec<PackageRef>, anyhow::Error> {
-        let pkgs = self.client.get_packages(&purl.to_string()).await.map_err(|e| {
-            let e = format!("Error getting packages from GUAC: {:?}", e);
-            log::warn!("{}", e);
-            anyhow!(e)
-        })?;
+        let pkgs = self
+            .client
+            .get_packages(&purl.to_string())
+            .await
+            .map_err(|e| {
+                let e = format!("Error getting packages from GUAC: {:?}", e);
+                log::warn!("{}", e);
+                anyhow!(e)
+            })?;
         let mut ret = Vec::new();
         for pkg in pkgs.iter() {
             let t = &pkg.type_;
