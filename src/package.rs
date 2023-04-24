@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 
-pub use trust_api_model::*;
+pub use trust_api_model::pkg::*;
 
 pub(crate) fn configure() -> impl FnOnce(&mut ServiceConfig) {
     |config: &mut ServiceConfig| {
