@@ -2331,9 +2331,20 @@ dependencies = [
  "snyk",
  "thiserror",
  "tokio",
+ "trust-api-model",
  "urlencoding",
  "utoipa",
  "utoipa-swagger-ui",
+]
+
+[[package]]
+name = "trust-api-model"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "urlencoding",
+ "utoipa",
 ]
 
 [[package]]

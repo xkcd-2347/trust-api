@@ -33,3 +33,10 @@ http = "*"
 reqwest = "0.11.16"
 snyk = { git = "https://github.com/dejanb/snyk-rs.git", branch = "main" }
 # guac = { package = "guac-rs", path = "../guac-rs/lib" }
+
+trust-api-model = { path = "trust-api-model" }
+
+[workspace]
+members = [
+    "trust-api-model"
+]
