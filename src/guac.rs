@@ -26,15 +26,7 @@ impl Guac {
         &self,
         purl: PackageUrl<'_>,
     ) -> Result<Vec<PackageRef>, anyhow::Error> {
-        //strip version to search for all related packages
-        let query_purl = format!(
-            "pkg:{}/{}/{}",
-            purl.ty(),
-            purl.namespace().unwrap(),
-            purl.name(),
-        );
-
-        let pkgs = self.client.get_packages(&query_purl).await.map_err(|e| {
+        let pkgs = self.client.get_packages(&purl.to_string()).await.map_err(|e| {
             let e = format!("Error getting packages from GUAC: {:?}", e);
             log::warn!("{}", e);
             anyhow!(e)
