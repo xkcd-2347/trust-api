@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::ops::Deref;
 use utoipa::ToSchema;
 
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
@@ -62,8 +63,24 @@ pub struct SnykData;
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 pub struct PackageDependencies(pub Vec<PackageRef>);
 
+impl Deref for PackageDependencies {
+    type Target = [PackageRef];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 pub struct PackageDependents(pub Vec<PackageRef>);
+
+impl Deref for PackageDependents {
+    type Target = [PackageRef];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[schema(example = "[\"pkg:maven/org.quarkus/quarkus@1.2\"]")]
