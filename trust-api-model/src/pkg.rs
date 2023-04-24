@@ -29,7 +29,7 @@ pub struct Package {
     pub trusted_versions: Vec<PackageRef>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub vulnerabilities: Vec<VulnerabilityRef>,
-    #[serdedefault, (skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snyk: Option<SnykData>,
 }
 
