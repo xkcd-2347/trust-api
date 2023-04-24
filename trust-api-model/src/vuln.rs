@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 
 use super::pkg::PackageRef;
 
-#[derive(ToSchema, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(Vulnerability {
 cve: "CVE-1234".to_string(),
 summary: "It's broken".to_string(),
@@ -25,15 +25,19 @@ trusted: None,
 }))]
 pub struct Vulnerability {
     pub cve: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub severity: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cvss3: Option<Cvss3>,
     pub summary: String,
     pub advisory: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub packages: Vec<PackageRef>,
 }
 
-#[derive(ToSchema, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(Cvss3{
 score: "7.3".to_string(),
 status: "verified".to_string()
