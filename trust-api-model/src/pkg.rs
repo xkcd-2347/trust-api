@@ -4,17 +4,17 @@ use utoipa::ToSchema;
 
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(Package {
-purl: Some("pkg:maven/org.apache.quarkus/quarkus@1.2".to_string()),
-href: Some(format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2"))),
+purl: Some("pkg:rpm/redhat/openssl@1.1.1k-7.el8_6".to_string()),
+href: Some(format!("/api/package?purl={}", &urlencoding::encode("pkg:rpm/redhat/openssl@1.1.1k-7.el8_6"))),
 trusted: Some(true),
 trusted_versions: vec![PackageRef {
-purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
-href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
+purl: "pkg:rpm/redhat/openssl@1.1.1k-7.el8_6".to_string(),
+href: format!("/api/package?purl={}", &urlencoding::encode("pkg:rpm/redhat/openssl@1.1.1k-7.el8_6")),
 trusted: Some(true)
 }],
 vulnerabilities: vec![VulnerabilityRef {
-cve: "CVE-1234".into(),
-href: "/api/vulnerability/CVE-1234".into()
+cve: "cve-2023-0286".into(),
+href: "https://access.redhat.com/security/cve/cve-2023-0286".into()
 }],
 snyk: None,
 }))]
@@ -36,8 +36,8 @@ pub struct Package {
 
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(VulnerabilityRef {
-cve: "CVE-1234".into(),
-href: "/api/vulnerability/CVE-1234".into()
+cve: "cve-2023-0286".into(),
+href: "https://access.redhat.com/security/cve/cve-2023-0286".into()
 }))]
 pub struct VulnerabilityRef {
     pub cve: String,
@@ -46,8 +46,8 @@ pub struct VulnerabilityRef {
 
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(PackageRef {
-purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
-href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
+purl: "pkg:rpm/redhat/openssl@1.1.1k-7.el8_6".to_string(),
+href: format!("/api/package?purl={}", &urlencoding::encode("pkg:rpm/redhat/openssl@1.1.1k-7.el8_6")),
 trusted: Some(true)
 }))]
 pub struct PackageRef {
@@ -61,6 +61,13 @@ pub struct PackageRef {
 pub struct SnykData;
 
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[schema(example = json!(vec![
+    PackageRef {
+        purl: "pkg:maven/io.vertx/vertx-web-common@4.3.7".to_string(),
+        href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/io.vertx/vertx-web-common@4.3.7")),
+        trusted: None,
+    }
+]))]
 pub struct PackageDependencies(pub Vec<PackageRef>);
 
 impl Deref for PackageDependencies {
@@ -72,6 +79,13 @@ impl Deref for PackageDependencies {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[schema(example = json!(vec![
+    PackageRef {
+        purl: "pkg:maven/io.quarkus/quarkus-vertx-http@2.16.2.Final".to_string(),
+        href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/io.quarkus/quarkus-vertx-http@2.16.2.Final")),
+        trusted: None,
+    }
+]))]
 pub struct PackageDependents(pub Vec<PackageRef>);
 
 impl Deref for PackageDependents {
@@ -83,7 +97,7 @@ impl Deref for PackageDependents {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
-#[schema(example = "[\"pkg:maven/org.quarkus/quarkus@1.2\"]")]
+#[schema(example = "[\"pkg:maven/io.vertx/vertx-web@4.3.7\"]")]
 pub struct PackageList(pub Vec<String>);
 
 impl PackageList {

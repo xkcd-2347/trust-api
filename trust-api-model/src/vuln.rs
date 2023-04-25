@@ -6,20 +6,20 @@ use super::pkg::PackageRef;
 
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(Vulnerability {
-cve: "CVE-1234".to_string(),
-summary: "It's broken".to_string(),
+cve: "cve-2023-0286".to_string(),
+summary: "There is a type confusion vulnerability...".to_string(),
 severity: Some("Important".to_string()),
-advisory: "RHSA-4321".to_string(),
+advisory: "https://access.redhat.com/security/cve/cve-2023-0286".to_string(),
 date: Some(Utc::now()),
 cvss3: Some(Cvss3 {
-score: "7.3".to_string(),
+score: "7.4".to_string(),
 status: "verified".to_string(),
 }),
 packages: vec![
 PackageRef {
-purl: "pkg:maven/org.apache.quarkus/quarkus@1.2".to_string(),
-href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2")),
-trusted: None,
+purl: "pkg:rpm/redhat/openssl@1.1.1k-7.el8_6".to_string(),
+href: format!("/api/package?purl={}", &urlencoding::encode("pkg:rpm/redhat/openssl@1.1.1k-7.el8_6")),
+trusted: Some(true),
 }
 ]
 }))]

@@ -119,18 +119,24 @@ impl TrustedContent {
                 }
             }
 
-            let p = Package {
-                purl: Some(purl.to_string()),
-                href: Some(format!(
-                    "/api/package?purl={}",
-                    &urlencoding::encode(&purl.to_string())
-                )),
-                trusted: Some(self.is_trusted(purl.clone())),
-                trusted_versions,
-                snyk: None,
-                vulnerabilities: vulns,
-            };
-            Ok(p)
+            if trusted_versions.is_empty() {
+                Err(ApiError::PackageNotFound {
+                    purl: purl.to_string(),
+                })
+            } else {
+                let p = Package {
+                    purl: Some(purl.to_string()),
+                    href: Some(format!(
+                        "/api/package?purl={}",
+                        &urlencoding::encode(&purl.to_string())
+                    )),
+                    trusted: Some(self.is_trusted(purl.clone())),
+                    trusted_versions,
+                    snyk: None,
+                    vulnerabilities: vulns,
+                };
+                Ok(p)
+            }
         } else {
             Err(ApiError::InvalidPackageUrl {
                 purl: purl_str.to_string(),
@@ -174,17 +180,9 @@ impl TrustedContent {
 #[utoipa::path(
     responses(
         (status = 200, description = "Package found", body = Package),
-        (status = NOT_FOUND, description = "Package not found", body = Package, example = json!(Package {
-            purl: None,
-            href: None,
-            trusted: None,
-            trusted_versions: vec![PackageRef {
-                purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
-                href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
-                trusted: None,
-            }],
-            vulnerabilities: Vec::new(),
-            snyk: None,
+        (status = NOT_FOUND, description = "Package not found", body = Package, example = json!({
+                "error": "Package pkg:rpm/redhat/openssl@1.1.1k-7.el8_9 was not found",
+                "status": 404
         })),
         (status = BAD_REQUEST, description = "Invalid package URL"),
         (status = BAD_REQUEST, description = "Missing query argument")
@@ -220,18 +218,10 @@ pub async fn get_trusted(data: web::Data<TrustedContent>) -> Result<HttpResponse
     request_body = PackageList,
     responses(
         (status = 200, description = "Package found", body = Vec<Option<Package>>),
-        (status = NOT_FOUND, description = "Package not found", body = Package, example = json!(Package {
-            purl: None,
-            href: None,
-            trusted: None,
-            trusted_versions: vec![PackageRef {
-                purl: "pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003".to_string(),
-                href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/org.apache.quarkus/quarkus@1.2-redhat-003")),
-                trusted: None,
-            }],
-            vulnerabilities: Vec::new(),
-            snyk: None,
-        })),
+        (status = NOT_FOUND, description = "Package not found", body = Package, example = json!({
+            "error": "Package pkg:rpm/redhat/openssl@1.1.1k-7.el8_9 was not found",
+            "status": 404
+    })),
         (status = BAD_REQUEST, description = "Invalid package URLs"),
     ),
 )]
@@ -244,11 +234,20 @@ pub async fn query_package(
     for purl in body.list().iter() {
         if let Ok(p) = data.get_trusted(purl).await {
             packages.push(Some(p));
-        } else {
-            packages.push(None);
         }
     }
-    Ok(HttpResponse::Ok().json(packages))
+
+    if packages.is_empty() {
+        Err(ApiError::PackageNotFound {
+            purl: body
+                .list()
+                .first()
+                .ok_or(ApiError::MissingQueryArgument)?
+                .to_string(),
+        })
+    } else {
+        Ok(HttpResponse::Ok().json(packages))
+    }
 }
 
 #[utoipa::path(
@@ -312,7 +311,13 @@ pub async fn query_package_dependents(
 #[utoipa::path(
     request_body = PackageList,
     responses(
-        (status = 200, description = "Package found", body = Vec<PackageRef>),
+        (status = 200, description = "Package found", body = Vec<PackageRef>, example = json!(vec![
+            (PackageRef {
+                purl: "pkg:maven/io.vertx/vertx-web@4.3.4.redhat-00007".to_string(),
+                href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/io.vertx/vertx-web@4.3.4.redhat-00007")),
+                trusted: Some(true)
+                })]
+        )),
         (status = BAD_REQUEST, description = "Invalid package URL"),
     ),
 )]
