@@ -1,8 +1,14 @@
 use crate::guac::Guac;
 use crate::sbom::SbomRegistry;
 use crate::Snyk;
+use actix_web::http::header::{DispositionParam, DispositionType};
 use actix_web::{
-    error, get, http::StatusCode, post, web, web::Json, web::ServiceConfig, HttpResponse,
+    error, get,
+    http::{header::ContentDisposition, StatusCode},
+    post, web,
+    web::Json,
+    web::ServiceConfig,
+    HttpResponse,
 };
 use core::str::FromStr;
 use packageurl::PackageUrl;
@@ -390,6 +396,13 @@ pub async fn query_package_versions(
     Ok(HttpResponse::Ok().json(versions))
 }
 
+#[derive(serde::Deserialize)]
+pub struct SBOMQuery {
+    purl: Option<String>,
+    #[serde(default)]
+    download: bool,
+}
+
 #[utoipa::path(
     request_body = PackageList,
     responses(
@@ -400,11 +413,21 @@ pub async fn query_package_versions(
 #[get("/api/package/sbom")]
 pub async fn query_sbom(
     data: web::Data<Arc<SbomRegistry>>,
-    query: web::Query<PackageQuery>,
+    query: web::Query<SBOMQuery>,
 ) -> Result<HttpResponse, ApiError> {
     if let Some(purl) = &query.purl {
         if let Some(value) = data.lookup(purl) {
-            Ok(HttpResponse::Ok().json(value))
+            let mut response = HttpResponse::Ok();
+            if query.download {
+                response.append_header(ContentDisposition {
+                    disposition: DispositionType::Attachment,
+                    parameters: vec![
+                        // TODO: I guess we can do better, but for now it's ok
+                        DispositionParam::Filename("sbom.json".to_string()),
+                    ],
+                });
+            }
+            Ok(response.json(value))
         } else {
             Err(ApiError::PackageNotFound {
                 purl: purl.to_string(),
