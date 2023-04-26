@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: guac
+  name: guac-osv
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guac
+  template:
+    metadata:
+      labels:
+        app: guac
+    spec:
+      containers:
+        - image: ghcr.io/xkcd-2347/guac:latest
+          imagePullPolicy: Always
+          command:
+            - sh
+            - -c
+            - /guacone osv --poll --interval 5 --gql-endpoint http://guac:8080/query
+          name: osv
