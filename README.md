@@ -50,7 +50,7 @@ podman run --net=host -v $PWD/data/files:/data -ti ghcr.io/xkcd-2347/guac:latest
 Run certifier:
 
 ```
- podman run --net=host -ti ghcr.io/xkcd-2347/guac:latest osv
+ podman run --net=host -ti ghcr.io/xkcd-2347/guac:latest osv -p=false
  ```
 
 Run the API server:
