@@ -245,7 +245,10 @@ impl Guac {
                                 None
                             },
                         };
-                        ret.push(p);
+                        //TODO fix guac repeated entries
+                        if !ret.contains(&p) {
+                            ret.push(p);
+                        }
                     }
                 }
             }
