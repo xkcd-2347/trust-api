@@ -8,6 +8,7 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::guac;
 use crate::index;
 use crate::package;
+use crate::sbom::SbomRegistry;
 use crate::vulnerability;
 use crate::Snyk;
 
@@ -52,6 +53,7 @@ impl Server {
         let openapi = ApiDoc::openapi();
 
         let guac = Arc::new(guac::Guac::new(&self.guac_url));
+        let sboms = Arc::new(SbomRegistry::new());
 
         HttpServer::new(move || {
             let cors = Cors::default()
@@ -64,6 +66,7 @@ impl Server {
             App::new()
                 .wrap(Logger::default())
                 .wrap(cors)
+                .app_data(Data::new(sboms.clone()))
                 .app_data(Data::new(package::TrustedContent::new(
                     guac.clone(),
                     self.snyk.clone(),

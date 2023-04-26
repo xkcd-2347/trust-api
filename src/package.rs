@@ -1,4 +1,5 @@
 use crate::guac::Guac;
+use crate::sbom::SbomRegistry;
 use crate::Snyk;
 use actix_web::{
     error, get, http::StatusCode, post, web, web::Json, web::ServiceConfig, HttpResponse,
@@ -20,6 +21,7 @@ pub(crate) fn configure() -> impl FnOnce(&mut ServiceConfig) {
         config.service(query_package_dependents);
         config.service(get_trusted);
         config.service(query_package_versions);
+        config.service(query_sbom);
     }
 }
 
@@ -337,6 +339,31 @@ pub async fn query_package_versions(
         }
     }
     Ok(HttpResponse::Ok().json(versions))
+}
+
+#[utoipa::path(
+    request_body = PackageList,
+    responses(
+        (status = 200, description = "SBOM found", body = serde_json::Value),
+        (status = BAD_REQUEST, description = "Invalid package URL"),
+    ),
+)]
+#[get("/api/package/sbom")]
+pub async fn query_sbom(
+    data: web::Data<Arc<SbomRegistry>>,
+    query: web::Query<PackageQuery>,
+) -> Result<HttpResponse, ApiError> {
+    if let Some(purl) = &query.purl {
+        if let Some(value) = data.lookup(purl) {
+            Ok(HttpResponse::Ok().json(value))
+        } else {
+            Err(ApiError::PackageNotFound {
+                purl: purl.to_string(),
+            })
+        }
+    } else {
+        Err(ApiError::MissingQueryArgument)
+    }
 }
 
 #[derive(Debug, Error, Serialize, Deserialize)]
