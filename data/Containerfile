@@ -1,5 +1,3 @@
 FROM ghcr.io/xkcd-2347/guac:latest
 
 ADD data/files /data
-
-ENTRYPOINT ["/guacone", "files", "/data"]
