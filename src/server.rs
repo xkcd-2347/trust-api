@@ -52,8 +52,8 @@ impl Server {
     pub async fn run(self) -> anyhow::Result<()> {
         let openapi = ApiDoc::openapi();
 
-        let guac = Arc::new(guac::Guac::new(&self.guac_url));
         let sboms = Arc::new(SbomRegistry::new());
+        let guac = Arc::new(guac::Guac::new(&self.guac_url, sboms.clone()));
 
         HttpServer::new(move || {
             let cors = Cors::default()
@@ -69,6 +69,7 @@ impl Server {
                 .app_data(Data::new(sboms.clone()))
                 .app_data(Data::new(package::TrustedContent::new(
                     guac.clone(),
+                    sboms.clone(),
                     self.snyk.clone(),
                 )))
                 .app_data(Data::new(guac.clone()))

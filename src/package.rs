@@ -34,12 +34,13 @@ static TRUSTED_GAV: &str = include_str!("../data/trusted-gav.json");
 
 pub struct TrustedContent {
     data: HashMap<String, String>,
+    sbom: Arc<SbomRegistry>,
     client: Arc<Guac>,
     snyk: Snyk,
 }
 
 impl TrustedContent {
-    pub fn new(client: Arc<Guac>, snyk: Snyk) -> Self {
+    pub fn new(client: Arc<Guac>, sbom: Arc<SbomRegistry>, snyk: Snyk) -> Self {
         let mut data = HashMap::new();
         let input: serde_json::Value = serde_json::from_str(TRUSTED_GAV).unwrap();
         if let Some(input) = input.as_array() {
@@ -49,7 +50,12 @@ impl TrustedContent {
                 data.insert(upstream, tc);
             }
         }
-        Self { data, client, snyk }
+        Self {
+            data,
+            client,
+            snyk,
+            sbom,
+        }
     }
 
     pub async fn get_versions(&self, purl_str: &str) -> Result<Vec<PackageRef>, ApiError> {
@@ -64,10 +70,19 @@ impl TrustedContent {
             for (key, value) in self.data.iter() {
                 if let Ok(p) = PackageUrl::from_str(key) {
                     if p.name() == purl.name() {
+                        let purl = value.clone();
                         trusted_versions.push(PackageRef {
-                            purl: value.clone(),
-                            href: format!("/api/package?purl={}", &urlencoding::encode(value)),
+                            purl: purl.clone(),
+                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
                             trusted: Some(true),
+                            sbom: if self.sbom.exists(&purl) {
+                                Some(format!(
+                                    "/api/package/sbom?purl={}",
+                                    &urlencoding::encode(&purl)
+                                ))
+                            } else {
+                                None
+                            },
                         });
                     }
                 }
@@ -113,10 +128,19 @@ impl TrustedContent {
                     purl.version().unwrap()
                 );
                 if let Some(p) = self.data.get(&query_purl) {
+                    let purl = p.clone();
                     trusted_versions.push(PackageRef {
-                        purl: p.clone(),
-                        href: format!("/api/package?purl={}", &urlencoding::encode(p)),
+                        purl: purl.clone(),
+                        href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
                         trusted: Some(true),
+                        sbom: if self.sbom.exists(&purl) {
+                            Some(format!(
+                                "/api/package/sbom?purl={}",
+                                &urlencoding::encode(&purl)
+                            ))
+                        } else {
+                            None
+                        },
                     });
                 }
             }
@@ -136,6 +160,14 @@ impl TrustedContent {
                     trusted_versions,
                     snyk: None,
                     vulnerabilities: vulns,
+                    sbom: if self.sbom.exists(&purl.to_string()) {
+                        Some(format!(
+                            "/api/package/sbom?purl={}",
+                            &urlencoding::encode(&purl.to_string())
+                        ))
+                    } else {
+                        None
+                    },
                 };
                 Ok(p)
             }
@@ -163,7 +195,23 @@ impl TrustedContent {
                     purl: v.clone(),
                     href: format!("/api/package?purl={}", &urlencoding::encode(&v.to_string())),
                     trusted: Some(true),
+                    sbom: if self.sbom.exists(&v) {
+                        Some(format!(
+                            "/api/package/sbom?purl={}",
+                            &urlencoding::encode(&v)
+                        ))
+                    } else {
+                        None
+                    },
                 }],
+                sbom: if self.sbom.exists(&k) {
+                    Some(format!(
+                        "/api/package/sbom?purl={}",
+                        &urlencoding::encode(&k)
+                    ))
+                } else {
+                    None
+                },
                 vulnerabilities: vec![],
                 snyk: None,
             });
@@ -317,7 +365,8 @@ pub async fn query_package_dependents(
             (PackageRef {
                 purl: "pkg:maven/io.vertx/vertx-web@4.3.4.redhat-00007".to_string(),
                 href: format!("/api/package?purl={}", &urlencoding::encode("pkg:maven/io.vertx/vertx-web@4.3.4.redhat-00007")),
-                trusted: Some(true)
+                trusted: Some(true),
+                sbom: None,
                 })]
         )),
         (status = BAD_REQUEST, description = "Invalid package URL"),

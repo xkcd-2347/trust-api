@@ -6,21 +6,21 @@ use super::pkg::PackageRef;
 
 #[derive(Clone, Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[schema(example = json!(Vulnerability {
-cve: "cve-2023-0286".to_string(),
-summary: "There is a type confusion vulnerability...".to_string(),
-severity: Some("Important".to_string()),
-advisory: "https://access.redhat.com/security/cve/cve-2023-0286".to_string(),
-date: Some(Utc::now()),
-cvss3: Some(Cvss3 {
-score: "7.4".to_string(),
-status: "verified".to_string(),
-}),
-packages: vec![
-PackageRef {
-purl: "pkg:rpm/redhat/openssl@1.1.1k-7.el8_6".to_string(),
-href: format!("/api/package?purl={}", &urlencoding::encode("pkg:rpm/redhat/openssl@1.1.1k-7.el8_6")),
-trusted: Some(true),
-}
+    cve: "cve-2023-0286".to_string(),
+    summary: "There is a type confusion vulnerability...".to_string(),
+    severity: Some("Important".to_string()),
+    advisory: "https://access.redhat.com/security/cve/cve-2023-0286".to_string(),
+    date: Some(Utc::now()),
+    cvss3: Some(Cvss3 {
+        score: "7.4".to_string(),
+        status: "verified".to_string(),
+    }),
+    packages: vec![PackageRef {
+        purl: "pkg:rpm/redhat/openssl@1.1.1k-7.el8_6".to_string(),
+        href: format!("/api/package?purl={}", &urlencoding::encode("pkg:rpm/redhat/openssl@1.1.1k-7.el8_6")),
+        trusted: Some(true),
+        sbom: None,
+    }
 ]
 }))]
 pub struct Vulnerability {

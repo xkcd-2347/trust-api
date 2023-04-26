@@ -2,6 +2,7 @@ use crate::package::Package;
 use crate::package::PackageDependencies;
 use crate::package::PackageRef;
 use crate::package::VulnerabilityRef;
+use crate::sbom::SbomRegistry;
 use crate::vulnerability::Cvss3;
 use crate::vulnerability::Vulnerability;
 use anyhow::anyhow;
@@ -10,16 +11,18 @@ use chrono::Utc;
 use guac_rs::client::GuacClient;
 use http::StatusCode;
 use packageurl::PackageUrl;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Guac {
     client: GuacClient,
+    sbom: Arc<SbomRegistry>,
 }
 
 impl Guac {
-    pub fn new(url: &str) -> Self {
+    pub fn new(url: &str, sbom: Arc<SbomRegistry>) -> Self {
         let client = GuacClient::new(url.to_string());
-        Self { client }
+        Self { client, sbom }
     }
 
     pub async fn get_packages(
@@ -49,6 +52,14 @@ impl Guac {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
                             trusted: Some(namespace.namespace == "redhat"),
+                            sbom: if self.sbom.exists(&purl) {
+                                Some(format!(
+                                    "/api/package/sbom?purl={}",
+                                    &urlencoding::encode(&purl)
+                                ))
+                            } else {
+                                None
+                            },
                         };
                         ret.push(p);
                     }
@@ -81,6 +92,14 @@ impl Guac {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
                             trusted: Some(namespace.namespace == "redhat"),
+                            sbom: if self.sbom.exists(&purl) {
+                                Some(format!(
+                                    "/api/package/sbom?purl={}",
+                                    &urlencoding::encode(&purl)
+                                ))
+                            } else {
+                                None
+                            },
                         };
                         packages.push(p);
                     }
@@ -217,6 +236,14 @@ impl Guac {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
                             trusted: None,
+                            sbom: if self.sbom.exists(&purl) {
+                                Some(format!(
+                                    "/api/package/sbom?purl={}",
+                                    &urlencoding::encode(&purl)
+                                ))
+                            } else {
+                                None
+                            },
                         };
                         ret.push(p);
                     }
@@ -250,6 +277,14 @@ impl Guac {
                             trusted_versions: vec![],
                             snyk: None,
                             vulnerabilities: vulns,
+                            sbom: if self.sbom.exists(&purl) {
+                                Some(format!(
+                                    "/api/package/sbom?purl={}",
+                                    &urlencoding::encode(&purl)
+                                ))
+                            } else {
+                                None
+                            },
                         };
                         all.push(p);
                     }
@@ -281,6 +316,14 @@ impl Guac {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
                             trusted: None,
+                            sbom: if self.sbom.exists(&purl) {
+                                Some(format!(
+                                    "/api/package/sbom?purl={}",
+                                    &urlencoding::encode(&purl)
+                                ))
+                            } else {
+                                None
+                            },
                         };
                         ret.push(p);
                     }

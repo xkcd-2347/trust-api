@@ -27,6 +27,10 @@ impl SbomRegistry {
         Self { data }
     }
 
+    pub fn exists(&self, purl: &str) -> bool {
+        self.data.contains_key(purl)
+    }
+
     pub fn lookup(&self, purl: &str) -> Option<serde_json::Value> {
         self.data.get(purl).cloned()
     }
