@@ -84,32 +84,26 @@ impl TrustedContent {
                 .await
                 .map_err(|_| ApiError::InternalError)?;
 
-            if trusted_versions.is_empty() {
-                Err(ApiError::PackageNotFound {
-                    purl: purl.to_string(),
-                })
-            } else {
-                let p = Package {
-                    purl: Some(purl.to_string()),
-                    href: Some(format!(
-                        "/api/package?purl={}",
+            let p = Package {
+                purl: Some(purl.to_string()),
+                href: Some(format!(
+                    "/api/package?purl={}",
+                    &urlencoding::encode(&purl.to_string())
+                )),
+                trusted: Some(self.is_trusted(purl.clone())),
+                trusted_versions,
+                snyk: None,
+                vulnerabilities: vulns,
+                sbom: if self.sbom.exists(&purl.to_string()) {
+                    Some(format!(
+                        "/api/package/sbom?purl={}",
                         &urlencoding::encode(&purl.to_string())
-                    )),
-                    trusted: Some(self.is_trusted(purl.clone())),
-                    trusted_versions,
-                    snyk: None,
-                    vulnerabilities: vulns,
-                    sbom: if self.sbom.exists(&purl.to_string()) {
-                        Some(format!(
-                            "/api/package/sbom?purl={}",
-                            &urlencoding::encode(&purl.to_string())
-                        ))
-                    } else {
-                        None
-                    },
-                };
-                Ok(p)
-            }
+                    ))
+                } else {
+                    None
+                },
+            };
+            Ok(p)
         } else {
             Err(ApiError::InvalidPackageUrl {
                 purl: purl_str.to_string(),
