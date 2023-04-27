@@ -44,7 +44,7 @@ podman run -p 8080:8080 -ti ghcr.io/xkcd-2347/guac:latest gql-server --gql-debug
 Ingest test SBOMs:
 
 ```
-podman run --net=host -v $PWD/data/files:/data -ti ghcr.io/xkcd-2347/guac:latest files /data
+podman run --net=host -v $PWD/data/files:/data:Z -ti ghcr.io/xkcd-2347/guac:latest files /data
 ```
 
 Run certifier:
