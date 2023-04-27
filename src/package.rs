@@ -13,7 +13,6 @@ use actix_web::{
 use core::str::FromStr;
 use packageurl::PackageUrl;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -36,10 +35,7 @@ pub struct PackageQuery {
     purl: Option<String>,
 }
 
-static TRUSTED_GAV: &str = include_str!("../data/trusted-gav.json");
-
 pub struct TrustedContent {
-    data: HashMap<String, String>,
     sbom: Arc<SbomRegistry>,
     client: Arc<Guac>,
     snyk: Snyk,
@@ -47,52 +43,16 @@ pub struct TrustedContent {
 
 impl TrustedContent {
     pub fn new(client: Arc<Guac>, sbom: Arc<SbomRegistry>, snyk: Snyk) -> Self {
-        let mut data = HashMap::new();
-        let input: serde_json::Value = serde_json::from_str(TRUSTED_GAV).unwrap();
-        if let Some(input) = input.as_array() {
-            for entry in input.iter() {
-                let upstream = entry["upstream"].as_str().unwrap().to_string();
-                let tc = entry["trusted"].as_str().unwrap().to_string();
-                data.insert(upstream, tc);
-            }
-        }
-        Self {
-            data,
-            client,
-            snyk,
-            sbom,
-        }
+        Self { client, snyk, sbom }
     }
 
     pub async fn get_versions(&self, purl_str: &str) -> Result<Vec<PackageRef>, ApiError> {
         if let Ok(purl) = PackageUrl::from_str(purl_str) {
-            //get related packages from guac
-            let mut trusted_versions: Vec<PackageRef> = self
+            let trusted_versions: Vec<PackageRef> = self
                 .client
                 .get_packages(purl.clone())
                 .await
                 .map_err(|_| ApiError::InternalError)?;
-
-            for (key, value) in self.data.iter() {
-                if let Ok(p) = PackageUrl::from_str(key) {
-                    if p.name() == purl.name() {
-                        let purl = value.clone();
-                        trusted_versions.push(PackageRef {
-                            purl: purl.clone(),
-                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: Some(true),
-                            sbom: if self.sbom.exists(&purl) {
-                                Some(format!(
-                                    "/api/package/sbom?purl={}",
-                                    &urlencoding::encode(&purl)
-                                ))
-                            } else {
-                                None
-                            },
-                        });
-                    }
-                }
-            }
 
             Ok(trusted_versions)
         } else {
@@ -118,38 +78,11 @@ impl TrustedContent {
             vulns.append(&mut snyk_vulns);
 
             //get related packages from Guac
-            let mut trusted_versions: Vec<PackageRef> = self
+            let trusted_versions: Vec<PackageRef> = self
                 .client
                 .get_packages(purl.clone())
                 .await
                 .map_err(|_| ApiError::InternalError)?;
-
-            //get trusted gav versions
-            if purl.version().is_some() && purl.namespace().is_some() {
-                let query_purl = format!(
-                    "pkg:{}/{}/{}@{}",
-                    purl.ty(),
-                    purl.namespace().unwrap(),
-                    purl.name(),
-                    purl.version().unwrap()
-                );
-                if let Some(p) = self.data.get(&query_purl) {
-                    let purl = p.clone();
-                    trusted_versions.push(PackageRef {
-                        purl: purl.clone(),
-                        href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                        trusted: Some(true),
-                        sbom: if self.sbom.exists(&purl) {
-                            Some(format!(
-                                "/api/package/sbom?purl={}",
-                                &urlencoding::encode(&purl)
-                            ))
-                        } else {
-                            None
-                        },
-                    });
-                }
-            }
 
             if trusted_versions.is_empty() {
                 Err(ApiError::PackageNotFound {
@@ -191,44 +124,11 @@ impl TrustedContent {
     }
 
     async fn get_all_trusted(&self) -> Result<Vec<Package>, ApiError> {
-        let mut trusted_versions = Vec::new();
-        for (k, v) in &self.data {
-            trusted_versions.push(Package {
-                purl: Some(k.clone()),
-                href: None,
-                trusted: Some(false),
-                trusted_versions: vec![PackageRef {
-                    purl: v.clone(),
-                    href: format!("/api/package?purl={}", &urlencoding::encode(&v.to_string())),
-                    trusted: Some(true),
-                    sbom: if self.sbom.exists(&v) {
-                        Some(format!(
-                            "/api/package/sbom?purl={}",
-                            &urlencoding::encode(&v)
-                        ))
-                    } else {
-                        None
-                    },
-                }],
-                sbom: if self.sbom.exists(&k) {
-                    Some(format!(
-                        "/api/package/sbom?purl={}",
-                        &urlencoding::encode(&k)
-                    ))
-                } else {
-                    None
-                },
-                vulnerabilities: vec![],
-                snyk: None,
-            });
-        }
-
-        trusted_versions.extend(
-            self.client
-                .get_all_packages()
-                .await
-                .map_err(|_| ApiError::InternalError)?,
-        );
+        let trusted_versions: Vec<Package> = self
+            .client
+            .get_all_packages()
+            .await
+            .map_err(|_| ApiError::InternalError)?;
         Ok(trusted_versions)
     }
 }

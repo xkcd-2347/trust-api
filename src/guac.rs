@@ -8,6 +8,7 @@ use crate::vulnerability::Vulnerability;
 use anyhow::anyhow;
 use chrono::DateTime;
 use chrono::Utc;
+use core::str::FromStr;
 use guac_rs::client::GuacClient;
 use http::StatusCode;
 use packageurl::PackageUrl;
@@ -51,7 +52,7 @@ impl Guac {
                         let p = PackageRef {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: Some(namespace.namespace == "redhat"),
+                            trusted: Some(self.is_trusted(&purl)),
                             sbom: if self.sbom.exists(&purl) {
                                 Some(format!(
                                     "/api/package/sbom?purl={}",
@@ -67,6 +68,15 @@ impl Guac {
             }
         }
         Ok(ret)
+    }
+
+    fn is_trusted(&self, purl: &str) -> bool {
+        if let Ok(purl) = PackageUrl::from_str(purl) {
+            purl.version().map_or(false, |v| v.contains("redhat"))
+                || purl.namespace().map_or(false, |v| v == "redhat")
+        } else {
+            false
+        }
     }
 
     pub async fn get_vulnerability(&self, cve_id: &str) -> Result<Vulnerability, anyhow::Error> {
@@ -91,7 +101,7 @@ impl Guac {
                         let p = PackageRef {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: Some(namespace.namespace == "redhat"),
+                            trusted: Some(self.is_trusted(&purl)),
                             sbom: if self.sbom.exists(&purl) {
                                 Some(format!(
                                     "/api/package/sbom?purl={}",
@@ -235,7 +245,7 @@ impl Guac {
                         let p = PackageRef {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: None,
+                            trusted: Some(self.is_trusted(&purl)),
                             sbom: if self.sbom.exists(&purl) {
                                 Some(format!(
                                     "/api/package/sbom?purl={}",
@@ -276,7 +286,7 @@ impl Guac {
                                 "/api/package?purl={}",
                                 &urlencoding::encode(&purl.to_string())
                             )),
-                            trusted: Some(namespace.namespace == "redhat"),
+                            trusted: Some(self.is_trusted(&purl)),
                             trusted_versions: vec![],
                             snyk: None,
                             vulnerabilities: vulns,
@@ -318,7 +328,7 @@ impl Guac {
                         let p = PackageRef {
                             purl: purl.clone(),
                             href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: None,
+                            trusted: Some(self.is_trusted(&purl)),
                             sbom: if self.sbom.exists(&purl) {
                                 Some(format!(
                                     "/api/package/sbom?purl={}",
