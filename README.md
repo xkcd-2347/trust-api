@@ -4,20 +4,7 @@ API server for trusted content (TC).
 
 ## Running on OpenShift
 
-To run the service on OpenShift with test-data:
-
-```shell
-oc new-project trusted
-oc apply -f k8s/guac
-oc apply -f k8s/api
-```
-
-To query the API:
-
-```shell
-HOST=$(oc get route api -o jsonpath='{.spec.host}')
-curl https://$HOST/api/trusted
-```
+See [this repository](https://github.com/xkcd-2347/trust-k8s)
 
 ## Running locally
 
