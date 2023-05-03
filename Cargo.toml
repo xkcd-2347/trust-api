@@ -28,11 +28,11 @@ futures = "0.3"
 utoipa = { version = "3", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "3", features = ["actix-web"] }
 urlencoding = "2.1.2"
-guac-rs = { git = "https://github.com/dejanb/guac-rs.git", branch = "main" }
+guac = { git = "https://github.com/dejanb/guac-rs.git", branch = "main" }
 http = "*"
 reqwest = "0.11.16"
 snyk = { git = "https://github.com/dejanb/snyk-rs.git", branch = "main" }
-#guac-rs = { path = "../guac-rs/lib" }
+#guac = { path = "../guac-rs/lib" }
 
 trust-api-model = { path = "trust-api-model" }
 

@@ -9,7 +9,7 @@ use anyhow::anyhow;
 use chrono::DateTime;
 use chrono::Utc;
 use core::str::FromStr;
-use guac_rs::client::GuacClient;
+use guac::client::GuacClient;
 use http::StatusCode;
 use packageurl::PackageUrl;
 use std::sync::Arc;
@@ -40,32 +40,21 @@ impl Guac {
                 anyhow!(e)
             })?;
         let mut ret = Vec::new();
-        for pkg in pkgs.iter() {
-            let t = &pkg.type_;
-            for namespace in pkg.namespaces.iter() {
-                for name in namespace.names.iter() {
-                    for version in name.versions.iter() {
-                        let purl = format!(
-                            "pkg:{}/{}/{}@{}",
-                            t, namespace.namespace, name.name, version.version
-                        );
-                        let p = PackageRef {
-                            purl: purl.clone(),
-                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: Some(self.is_trusted(&purl)),
-                            sbom: if self.sbom.exists(&purl) {
-                                Some(format!(
-                                    "/api/package/sbom?purl={}",
-                                    &urlencoding::encode(&purl)
-                                ))
-                            } else {
-                                None
-                            },
-                        };
-                        ret.push(p);
-                    }
-                }
-            }
+        for purl in pkgs.iter() {
+            let p = PackageRef {
+                purl: purl.clone(),
+                href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                trusted: Some(self.is_trusted(purl)),
+                sbom: if self.sbom.exists(&purl) {
+                    Some(format!(
+                        "/api/package/sbom?purl={}",
+                        &urlencoding::encode(&purl)
+                    ))
+                } else {
+                    None
+                },
+            };
+            ret.push(p);
         }
         Ok(ret)
     }
@@ -89,31 +78,21 @@ impl Guac {
 
         let mut packages = Vec::new();
         for vuln in vulns.iter() {
-            let pkg = &vuln.package;
-            let t = &pkg.type_;
-            for namespace in pkg.namespaces.iter() {
-                for name in namespace.names.iter() {
-                    for version in name.versions.iter() {
-                        let purl = format!(
-                            "pkg:{}/{}/{}@{}",
-                            t, namespace.namespace, name.name, version.version
-                        );
-                        let p = PackageRef {
-                            purl: purl.clone(),
-                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: Some(self.is_trusted(&purl)),
-                            sbom: if self.sbom.exists(&purl) {
-                                Some(format!(
-                                    "/api/package/sbom?purl={}",
-                                    &urlencoding::encode(&purl)
-                                ))
-                            } else {
-                                None
-                            },
-                        };
-                        packages.push(p);
-                    }
-                }
+            for purl in vuln.packages.iter() {
+                let p = PackageRef {
+                    purl: purl.clone(),
+                    href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                    trusted: Some(self.is_trusted(&purl)),
+                    sbom: if self.sbom.exists(&purl) {
+                        Some(format!(
+                            "/api/package/sbom?purl={}",
+                            &urlencoding::encode(&purl)
+                        ))
+                    } else {
+                        None
+                    },
+                };
+                packages.push(p);
             }
         }
 
@@ -189,9 +168,9 @@ impl Guac {
 
         let mut ret = Vec::new();
         for vuln in vulns.iter() {
-            match &vuln.vulnerability {
-                guac_rs::vuln::certify_vuln_q1::AllCertifyVulnTreeVulnerability::OSV(osv) => {
-                    let id = osv.osv_id.clone();
+            match (&vuln.cve, &vuln.osv) {
+                (None, Some(osv)) => {
+                    let id = osv.clone();
                     let vuln_ref = VulnerabilityRef {
                         cve: id.clone(),
                         href: format!(
@@ -205,12 +184,12 @@ impl Guac {
                         ret.push(vuln_ref);
                     }
                 }
-                guac_rs::vuln::certify_vuln_q1::AllCertifyVulnTreeVulnerability::CVE(id) => {
+                (Some(cve_id), None) => {
                     let vuln_ref = VulnerabilityRef {
-                        cve: id.cve_id.clone(),
+                        cve: cve_id.clone(),
                         href: format!(
                             "https://access.redhat.com/security/cve/{}",
-                            id.cve_id.to_lowercase()
+                            cve_id.to_lowercase()
                         ), //TODO fix guac id format
                     };
                     //TODO fix guac repeated entries
@@ -232,35 +211,23 @@ impl Guac {
         })?;
 
         let mut ret = Vec::new();
-        for dep in deps.iter() {
-            let pkg = &dep.dependent_package;
-            let t = &pkg.type_;
-            for namespace in pkg.namespaces.iter() {
-                for name in namespace.names.iter() {
-                    for version in name.versions.iter() {
-                        let purl = format!(
-                            "pkg:{}/{}/{}@{}",
-                            t, namespace.namespace, name.name, version.version
-                        );
-                        let p = PackageRef {
-                            purl: purl.clone(),
-                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: Some(self.is_trusted(&purl)),
-                            sbom: if self.sbom.exists(&purl) {
-                                Some(format!(
-                                    "/api/package/sbom?purl={}",
-                                    &urlencoding::encode(&purl)
-                                ))
-                            } else {
-                                None
-                            },
-                        };
-                        //TODO fix guac repeated entries
-                        if !ret.contains(&p) {
-                            ret.push(p);
-                        }
-                    }
-                }
+        for purl in deps.iter() {
+            let p = PackageRef {
+                purl: purl.clone(),
+                href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                trusted: Some(self.is_trusted(&purl)),
+                sbom: if self.sbom.exists(&purl) {
+                    Some(format!(
+                        "/api/package/sbom?purl={}",
+                        &urlencoding::encode(&purl)
+                    ))
+                } else {
+                    None
+                },
+            };
+            //TODO fix guac repeated entries
+            if !ret.contains(&p) {
+                ret.push(p);
             }
         }
         Ok(PackageDependencies(ret))
@@ -270,39 +237,28 @@ impl Guac {
         let all_packages = self.client.get_all_packages().await?;
 
         let mut all = Vec::new();
-        for pkg in all_packages.iter() {
-            let t = &pkg.type_;
-            for namespace in pkg.namespaces.iter() {
-                for name in namespace.names.iter() {
-                    for version in name.versions.iter() {
-                        let purl = format!(
-                            "pkg:{}/{}/{}@{}",
-                            t, namespace.namespace, name.name, version.version
-                        );
-                        let vulns = self.get_vulnerabilities(&purl).await?;
-                        let p = Package {
-                            purl: Some(purl.to_string()),
-                            href: Some(format!(
-                                "/api/package?purl={}",
-                                &urlencoding::encode(&purl.to_string())
-                            )),
-                            trusted: Some(self.is_trusted(&purl)),
-                            trusted_versions: vec![],
-                            snyk: None,
-                            vulnerabilities: vulns,
-                            sbom: if self.sbom.exists(&purl) {
-                                Some(format!(
-                                    "/api/package/sbom?purl={}",
-                                    &urlencoding::encode(&purl)
-                                ))
-                            } else {
-                                None
-                            },
-                        };
-                        all.push(p);
-                    }
-                }
-            }
+        for purl in all_packages.iter() {
+            let vulns = self.get_vulnerabilities(&purl).await?;
+            let p = Package {
+                purl: Some(purl.to_string()),
+                href: Some(format!(
+                    "/api/package?purl={}",
+                    &urlencoding::encode(&purl.to_string())
+                )),
+                trusted: Some(self.is_trusted(&purl)),
+                trusted_versions: vec![],
+                snyk: None,
+                vulnerabilities: vulns,
+                sbom: if self.sbom.exists(&purl) {
+                    Some(format!(
+                        "/api/package/sbom?purl={}",
+                        &urlencoding::encode(&purl)
+                    ))
+                } else {
+                    None
+                },
+            };
+            all.push(p);
         }
         Ok(all)
     }
@@ -315,33 +271,21 @@ impl Guac {
         })?;
 
         let mut ret = Vec::new();
-        for dep in deps.iter() {
-            let pkg = &dep.package;
-            let t = &pkg.type_;
-            for namespace in pkg.namespaces.iter() {
-                for name in namespace.names.iter() {
-                    for version in name.versions.iter() {
-                        let purl = format!(
-                            "pkg:{}/{}/{}@{}",
-                            t, namespace.namespace, name.name, version.version
-                        );
-                        let p = PackageRef {
-                            purl: purl.clone(),
-                            href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
-                            trusted: Some(self.is_trusted(&purl)),
-                            sbom: if self.sbom.exists(&purl) {
-                                Some(format!(
-                                    "/api/package/sbom?purl={}",
-                                    &urlencoding::encode(&purl)
-                                ))
-                            } else {
-                                None
-                            },
-                        };
-                        ret.push(p);
-                    }
-                }
-            }
+        for purl in deps.iter() {
+            let p = PackageRef {
+                purl: purl.clone(),
+                href: format!("/api/package?purl={}", &urlencoding::encode(&purl)),
+                trusted: Some(self.is_trusted(&purl)),
+                sbom: if self.sbom.exists(&purl) {
+                    Some(format!(
+                        "/api/package/sbom?purl={}",
+                        &urlencoding::encode(&purl)
+                    ))
+                } else {
+                    None
+                },
+            };
+            ret.push(p);
         }
         Ok(PackageDependencies(ret))
     }
