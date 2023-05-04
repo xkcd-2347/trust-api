@@ -27,7 +27,7 @@ pub struct Server {
             package::search_packages,
             package::search_package_dependencies,
             package::search_package_dependents,
-            vulnerability::search_vulnerability,
+            vulnerability::get_vulnerability,
         ),
         components(
             schemas(package::Package, package::PackageList, package::PackageDependencies, package::PackageDependents, package::PackageRef, package::SnykData, package::VulnerabilityRef, vulnerability::Vulnerability)
