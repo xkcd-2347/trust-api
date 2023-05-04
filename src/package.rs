@@ -21,12 +21,12 @@ pub use trust_api_model::pkg::*;
 pub(crate) fn configure() -> impl FnOnce(&mut ServiceConfig) {
     |config: &mut ServiceConfig| {
         config.service(get_package);
-        config.service(query_package);
-        config.service(query_package_dependencies);
-        config.service(query_package_dependents);
+        config.service(get_packages);
+        config.service(search_packages);
+        config.service(search_package_dependencies);
+        config.service(search_package_dependents);
         config.service(get_trusted);
-        config.service(query_package_versions);
-        config.service(query_sbom);
+        config.service(check_sbom);
     }
 }
 
@@ -46,7 +46,7 @@ impl TrustedContent {
         Self { client, snyk, sbom }
     }
 
-    pub async fn get_versions(&self, purl_str: &str) -> Result<Vec<PackageRef>, ApiError> {
+    pub async fn search(&self, purl_str: &str) -> Result<Vec<PackageRef>, ApiError> {
         if let Ok(purl) = PackageUrl::from_str(purl_str) {
             let trusted_versions: Vec<PackageRef> = self
                 .client
@@ -78,11 +78,35 @@ impl TrustedContent {
             vulns.append(&mut snyk_vulns);
 
             //get related packages from Guac
-            let trusted_versions: Vec<PackageRef> = self
+            let mut packages: Vec<PackageRef> = self
                 .client
                 .get_packages(purl.clone())
                 .await
                 .map_err(|_| ApiError::InternalError)?;
+
+            let mut exact_match = None;
+            for package in packages.iter() {
+                if package.purl == purl_str {
+                    exact_match.replace(package.clone());
+                }
+            }
+
+            if exact_match.is_none() {
+                return Err(ApiError::PackageNotFound {
+                    purl: purl_str.to_string(),
+                });
+            }
+
+            let trusted_versions: Vec<PackageRef> = packages
+                .drain(..)
+                .filter(|p| {
+                    if let Ok(p) = PackageUrl::from_str(&p.purl) {
+                        self.is_trusted(&p)
+                    } else {
+                        false
+                    }
+                })
+                .collect();
 
             let p = Package {
                 purl: Some(purl.to_string()),
@@ -90,7 +114,7 @@ impl TrustedContent {
                     "/api/package?purl={}",
                     &urlencoding::encode(&purl.to_string())
                 )),
-                trusted: Some(self.is_trusted(purl.clone())),
+                trusted: Some(self.is_trusted(&purl)),
                 trusted_versions,
                 snyk: None,
                 vulnerabilities: vulns,
@@ -112,7 +136,7 @@ impl TrustedContent {
     }
 
     // temp fn to decide if the package is trusted based on its version or namespace
-    fn is_trusted(&self, purl: PackageUrl<'_>) -> bool {
+    fn is_trusted(&self, purl: &PackageUrl<'_>) -> bool {
         purl.version().map_or(false, |v| v.contains("redhat"))
             || purl.namespace().map_or(false, |v| v == "redhat")
     }
@@ -176,7 +200,7 @@ pub async fn get_trusted(data: web::Data<TrustedContent>) -> Result<HttpResponse
     ),
 )]
 #[post("/api/package")]
-pub async fn query_package(
+pub async fn get_packages(
     data: web::Data<TrustedContent>,
     body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
@@ -208,7 +232,7 @@ pub async fn query_package(
     ),
 )]
 #[post("/api/package/dependencies")]
-pub async fn query_package_dependencies(
+pub async fn search_package_dependencies(
     data: web::Data<Arc<Guac>>,
     body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
@@ -237,7 +261,7 @@ pub async fn query_package_dependencies(
     ),
 )]
 #[post("/api/package/dependents")]
-pub async fn query_package_dependents(
+pub async fn search_package_dependents(
     data: web::Data<Arc<Guac>>,
     body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
@@ -272,15 +296,15 @@ pub async fn query_package_dependents(
         (status = BAD_REQUEST, description = "Invalid package URL"),
     ),
 )]
-#[post("/api/package/versions")]
-pub async fn query_package_versions(
+#[post("/api/package/search")]
+pub async fn search_packages(
     data: web::Data<TrustedContent>,
     body: Json<PackageList>,
 ) -> Result<HttpResponse, ApiError> {
     let mut versions = Vec::new();
     for purl_str in body.list().iter() {
         if PackageUrl::from_str(purl_str).is_ok() {
-            versions = data.get_versions(purl_str).await?;
+            versions = data.search(purl_str).await?;
         } else {
             return Err(ApiError::InvalidPackageUrl {
                 purl: purl_str.to_string(),
@@ -305,7 +329,7 @@ pub struct SBOMQuery {
     ),
 )]
 #[get("/api/package/sbom")]
-pub async fn query_sbom(
+pub async fn check_sbom(
     data: web::Data<Arc<SbomRegistry>>,
     query: web::Query<SBOMQuery>,
 ) -> Result<HttpResponse, ApiError> {

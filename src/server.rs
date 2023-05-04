@@ -23,11 +23,11 @@ pub struct Server {
 #[openapi(
         paths(
             package::get_package,
-            package::query_package,
-            package::query_package_dependencies,
-            package::query_package_dependents,
-            package::query_package_versions,
-            vulnerability::query_vulnerability,
+            package::get_packages,
+            package::search_packages,
+            package::search_package_dependencies,
+            package::search_package_dependents,
+            vulnerability::get_vulnerability,
         ),
         components(
             schemas(package::Package, package::PackageList, package::PackageDependencies, package::PackageDependents, package::PackageRef, package::SnykData, package::VulnerabilityRef, vulnerability::Vulnerability)
