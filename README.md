@@ -31,13 +31,13 @@ podman run -p 8080:8080 -ti ghcr.io/xkcd-2347/guac:latest gql-server --gql-debug
 Ingest test SBOMs:
 
 ```shell
-podman run --net=host -v $PWD/data/files:/data:Z -ti ghcr.io/xkcd-2347/guac:latest files /data
+podman run --net=host -v $PWD/data/files:/data:Z --rm -ti ghcr.io/xkcd-2347/guac:latest files /data
 ```
 
 Run certifier:
 
 ```shell
-podman run --net=host -ti ghcr.io/xkcd-2347/guac:latest osv -p=false
+podman run --net=host --rm -ti ghcr.io/xkcd-2347/guac:latest osv -p=false
  ```
 
 Run the API server:
