@@ -84,11 +84,19 @@ impl TrustedContent {
                 .await
                 .map_err(|_| ApiError::InternalError)?;
 
-            if packages.is_empty() {
+            let mut exact_match = None;
+            for package in packages.iter() {
+                if package.purl == purl_str {
+                    exact_match.replace(package.clone());
+                }
+            }
+
+            if exact_match.is_none() {
                 return Err(ApiError::PackageNotFound {
                     purl: purl_str.to_string(),
                 });
             }
+
             let trusted_versions: Vec<PackageRef> = packages
                 .drain(..)
                 .filter(|p| {
