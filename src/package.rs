@@ -192,10 +192,6 @@ pub async fn get_trusted(data: web::Data<TrustedContent>) -> Result<HttpResponse
     request_body = PackageList,
     responses(
         (status = 200, description = "Package found", body = Vec<Option<Package>>),
-        (status = NOT_FOUND, description = "Package not found", body = Package, example = json!({
-            "error": "Package pkg:rpm/redhat/openssl@1.1.1k-7.el8_9 was not found",
-            "status": 404
-    })),
         (status = BAD_REQUEST, description = "Invalid package URLs"),
     ),
 )]
@@ -210,18 +206,7 @@ pub async fn get_packages(
             packages.push(Some(p));
         }
     }
-
-    if packages.is_empty() {
-        Err(ApiError::PackageNotFound {
-            purl: body
-                .list()
-                .first()
-                .ok_or(ApiError::MissingQueryArgument)?
-                .to_string(),
-        })
-    } else {
-        Ok(HttpResponse::Ok().json(packages))
-    }
+    Ok(HttpResponse::Ok().json(packages))
 }
 
 #[utoipa::path(
